@@ -11,7 +11,7 @@ import {
   Image,
 } from 'react-native';
 
-const TODO_ICON = require('@/assets/images/todo-icon.png');
+const TODO_ICON = require('@/assets/images/icon.png');
 import { Link } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import { ThemeColors } from '@/constants/theme';

@@ -6,6 +6,7 @@ import 'react-native-reanimated';
 import { Provider } from 'react-redux';
 
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { SplashScreen } from '@/components/SplashScreen';
 import { store } from '@/store';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { setUser, clearUser } from '@/store/userSlice';
@@ -18,6 +19,7 @@ function RootLayoutNav() {
   const dispatch = useAppDispatch();
   const isLoggedIn = useAppSelector((state) => state.user.isLoggedIn);
   const [isReady, setIsReady] = useState(false);
+  const [splashVisible, setSplashVisible] = useState(true);
   const router = useRouter();
   const segments = useSegments();
 
@@ -62,6 +64,12 @@ function RootLayoutNav() {
     return () => subscription.unsubscribe();
   }, []);
 
+  // TODO: remove this timer before production — for testing splash screen duration only
+  useEffect(() => {
+    const timer = setTimeout(() => setSplashVisible(false), 5000);
+    return () => clearTimeout(timer);
+  }, []);
+
   useEffect(() => {
     if (!isReady) return;
 
@@ -76,10 +84,14 @@ function RootLayoutNav() {
 
   return (
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <Stack>
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="(auth)" options={{ headerShown: false }} />
-      </Stack>
+      {(!isReady || splashVisible) ? (
+        <SplashScreen />
+      ) : (
+        <Stack>
+          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+          <Stack.Screen name="(auth)" options={{ headerShown: false }} />
+        </Stack>
+      )}
       <StatusBar style="auto" />
     </ThemeProvider>
   );
