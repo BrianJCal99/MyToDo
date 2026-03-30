@@ -2,7 +2,7 @@ import { View, Text, Image, StyleSheet } from 'react-native';
 import { useThemeColors } from '@/hooks/use-theme-colors';
 import { ThemeColors } from '@/constants/theme';
 
-const APP_ICON = require('@/assets/images/icon.png');
+const APP_ICON = require('@/assets/images/icons/icon.png');
 
 export function SplashScreen() {
   const colors = useThemeColors();

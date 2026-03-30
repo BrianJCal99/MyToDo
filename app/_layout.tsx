@@ -19,7 +19,7 @@ function RootLayoutNav() {
   const dispatch = useAppDispatch();
   const isLoggedIn = useAppSelector((state) => state.user.isLoggedIn);
   const [isReady, setIsReady] = useState(false);
-  const [splashVisible, setSplashVisible] = useState(true);
+
   const router = useRouter();
   const segments = useSegments();
 
@@ -64,11 +64,6 @@ function RootLayoutNav() {
     return () => subscription.unsubscribe();
   }, []);
 
-  // TODO: remove this timer before production — for testing splash screen duration only
-  useEffect(() => {
-    const timer = setTimeout(() => setSplashVisible(false), 5000);
-    return () => clearTimeout(timer);
-  }, []);
 
   useEffect(() => {
     if (!isReady) return;
@@ -84,7 +79,7 @@ function RootLayoutNav() {
 
   return (
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      {(!isReady || splashVisible) ? (
+      {!isReady ? (
         <SplashScreen />
       ) : (
         <Stack>
