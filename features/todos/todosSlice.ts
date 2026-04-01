@@ -5,24 +5,34 @@ import {
   upsertTodosToSupabase,
   deleteTodoFromSupabase,
 } from '@/services/todosService';
+import { DEFAULT_LIST_ID } from '@/features/lists/listsSlice';
+
+export type Priority = 'low' | 'medium' | 'high';
+export type Filter = 'all' | 'active' | 'completed' | 'overdue' | 'high_priority';
+export type SortBy = 'createdAt' | 'updatedAt' | 'priority' | 'dueDate';
+export type SortOrder = 'asc' | 'desc';
 
 export interface Todo {
   id: string;
   title: string;
   description?: string;
   completed: boolean;
+  priority: Priority;
+  dueDate: number | null;
+  listId: string;
   createdAt: number;
   updatedAt: number;
   synced: boolean;
 }
-
-export type Filter = 'all' | 'completed' | 'active';
 
 export interface TodosState {
   todos: Todo[];
   loading: boolean;
   error: string | null;
   filter: Filter;
+  searchQuery: string;
+  sortBy: SortBy;
+  sortOrder: SortOrder;
 }
 
 const initialState: TodosState = {
@@ -30,6 +40,9 @@ const initialState: TodosState = {
   loading: false,
   error: null,
   filter: 'all',
+  searchQuery: '',
+  sortBy: 'createdAt',
+  sortOrder: 'desc',
 };
 
 function generateId(): string {
@@ -38,6 +51,22 @@ function generateId(): string {
     const v = c === 'x' ? r : (r & 0x3) | 0x8;
     return v.toString(16);
   });
+}
+
+// Fills in defaults for todos loaded from storage or Supabase that may be missing new fields
+function migrateTodo(raw: Record<string, unknown>): Todo {
+  return {
+    id: raw.id as string,
+    title: raw.title as string,
+    description: raw.description as string | undefined,
+    completed: (raw.completed as boolean) ?? false,
+    priority: (raw.priority as Priority) ?? 'medium',
+    dueDate: (raw.dueDate as number | null) ?? null,
+    listId: (raw.listId as string) ?? DEFAULT_LIST_ID,
+    createdAt: (raw.createdAt as number) ?? Date.now(),
+    updatedAt: (raw.updatedAt as number) ?? Date.now(),
+    synced: (raw.synced as boolean) ?? false,
+  };
 }
 
 function mergeTodoLists(local: Todo[], remote: Todo[]): Todo[] {
@@ -54,7 +83,8 @@ function mergeTodoLists(local: Todo[], remote: Todo[]): Todo[] {
 // ─── Async Thunks ────────────────────────────────────────────────────────────
 
 export const hydrateTodos = createAsyncThunk('todos/hydrate', async (userId: string) => {
-  return await loadTodosFromStorage(userId);
+  const raw = await loadTodosFromStorage(userId);
+  return (raw as Record<string, unknown>[]).map(migrateTodo);
 });
 
 export const fetchTodos = createAsyncThunk(
@@ -79,13 +109,28 @@ export const syncTodos = createAsyncThunk(
 
 export const addTodo = createAsyncThunk(
   'todos/add',
-  async ({ title, description }: { title: string; description?: string }): Promise<Todo> => {
+  async ({
+    title,
+    description,
+    listId,
+    priority,
+    dueDate,
+  }: {
+    title: string;
+    description?: string;
+    listId?: string;
+    priority?: Priority;
+    dueDate?: number | null;
+  }): Promise<Todo> => {
     const now = Date.now();
     return {
       id: generateId(),
       title: title.trim(),
       description: description?.trim() || undefined,
       completed: false,
+      priority: priority ?? 'medium',
+      dueDate: dueDate ?? null,
+      listId: listId ?? DEFAULT_LIST_ID,
       createdAt: now,
       updatedAt: now,
       synced: false,
@@ -99,12 +144,26 @@ export const updateTodo = createAsyncThunk(
     id,
     title,
     description,
+    priority,
+    dueDate,
+    listId,
   }: {
     id: string;
     title: string;
     description?: string;
+    priority?: Priority;
+    dueDate?: number | null;
+    listId?: string;
   }) => {
-    return { id, title: title.trim(), description: description?.trim() || undefined, updatedAt: Date.now() };
+    return {
+      id,
+      title: title.trim(),
+      description: description?.trim() || undefined,
+      priority,
+      dueDate,
+      listId,
+      updatedAt: Date.now(),
+    };
   }
 );
 
@@ -126,6 +185,15 @@ const todosSlice = createSlice({
   reducers: {
     setFilter(state, action: PayloadAction<Filter>) {
       state.filter = action.payload;
+    },
+    setSearchQuery(state, action: PayloadAction<string>) {
+      state.searchQuery = action.payload;
+    },
+    setSortBy(state, action: PayloadAction<SortBy>) {
+      state.sortBy = action.payload;
+    },
+    setSortOrder(state, action: PayloadAction<SortOrder>) {
+      state.sortOrder = action.payload;
     },
     clearTodos() {
       return initialState;
@@ -163,11 +231,14 @@ const todosSlice = createSlice({
       })
       // update
       .addCase(updateTodo.fulfilled, (state, action) => {
-        const { id, title, description, updatedAt } = action.payload;
+        const { id, title, description, priority, dueDate, listId, updatedAt } = action.payload;
         const todo = state.todos.find((t) => t.id === id);
         if (todo) {
           todo.title = title;
           todo.description = description;
+          if (priority !== undefined) todo.priority = priority;
+          if (dueDate !== undefined) todo.dueDate = dueDate;
+          if (listId !== undefined) todo.listId = listId;
           todo.updatedAt = updatedAt;
           todo.synced = false;
         }
@@ -189,5 +260,5 @@ const todosSlice = createSlice({
   },
 });
 
-export const { setFilter, clearTodos } = todosSlice.actions;
+export const { setFilter, setSearchQuery, setSortBy, setSortOrder, clearTodos } = todosSlice.actions;
 export default todosSlice.reducer;

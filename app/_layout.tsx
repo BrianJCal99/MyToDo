@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import { useFonts } from 'expo-font';
 import 'react-native-reanimated';
 import { Provider } from 'react-redux';
 
@@ -11,7 +12,8 @@ import { store } from '@/store';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { setUser, clearUser } from '@/store/userSlice';
 import { clearTodos } from '@/features/todos/todosSlice';
-import { clearTodosFromStorage } from '@/services/storage';
+import { clearLists } from '@/features/lists/listsSlice';
+import { clearTodosFromStorage, clearListsFromStorage, clearPrefsFromStorage } from '@/services/storage';
 import { supabase } from '@/lib/supabase';
 
 function RootLayoutNav() {
@@ -19,6 +21,10 @@ function RootLayoutNav() {
   const dispatch = useAppDispatch();
   const isLoggedIn = useAppSelector((state) => state.user.isLoggedIn);
   const [isReady, setIsReady] = useState(false);
+
+  const [fontsLoaded] = useFonts({
+    Lineicons: require('../assets/fonts/Lineicons.ttf'),
+  });
 
   const router = useRouter();
   const segments = useSegments();
@@ -55,8 +61,11 @@ function RootLayoutNav() {
         const userId = store.getState().user.id;
         if (userId) {
           clearTodosFromStorage(userId);
+          clearListsFromStorage(userId);
+          clearPrefsFromStorage(userId);
         }
         dispatch(clearTodos());
+        dispatch(clearLists());
         dispatch(clearUser());
       }
     });
@@ -79,7 +88,7 @@ function RootLayoutNav() {
 
   return (
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      {!isReady ? (
+      {!isReady || !fontsLoaded ? (
         <SplashScreen />
       ) : (
         <Stack>

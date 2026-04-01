@@ -15,6 +15,7 @@ import { ThemeColors } from '@/constants/theme';
 import { useThemeColors } from '@/hooks/use-theme-colors';
 import { useAppSelector, useAppDispatch } from '@/store';
 import { setUser } from '@/store/userSlice';
+import LniIcon from '@/components/LniIcon';
 
 const DANGER = '#E53838';
 
@@ -95,7 +96,7 @@ export default function AccountScreen() {
         {/* Header */}
         <View style={styles.header}>
           <TouchableOpacity style={styles.backBtn} onPress={() => router.back()} hitSlop={8}>
-            <Text style={styles.backArrow}>←</Text>
+            <LniIcon name="lni-chevron-left" size={18} color={colors.text} />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Account</Text>
         </View>
@@ -234,12 +235,6 @@ function makeStyles(colors: ThemeColors) {
       borderColor: colors.border,
       alignItems: 'center',
       justifyContent: 'center',
-    },
-    backArrow: {
-      fontSize: 16,
-      fontWeight: '700',
-      color: colors.text,
-      lineHeight: 20,
     },
     headerTitle: {
       fontSize: 22,

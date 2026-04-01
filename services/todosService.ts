@@ -1,5 +1,6 @@
 import { supabase } from '@/lib/supabase';
-import { Todo } from '@/features/todos/todosSlice';
+import { Todo, Priority } from '@/features/todos/todosSlice';
+import { DEFAULT_LIST_ID } from '@/features/lists/listsSlice';
 
 interface SupabaseTodoRow {
   id: string;
@@ -7,6 +8,9 @@ interface SupabaseTodoRow {
   title: string;
   description: string | null;
   completed: boolean;
+  priority: Priority | null;
+  due_date: number | null;
+  list_id: string | null;
   created_at: number;
   updated_at: number;
 }
@@ -17,6 +21,9 @@ function rowToTodo(row: SupabaseTodoRow): Todo {
     title: row.title,
     description: row.description ?? undefined,
     completed: row.completed,
+    priority: row.priority ?? 'medium',
+    dueDate: row.due_date ?? null,
+    listId: row.list_id ?? DEFAULT_LIST_ID,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     synced: true,
@@ -43,6 +50,9 @@ export async function upsertTodosToSupabase(todos: Todo[], userId: string): Prom
     title: t.title,
     description: t.description ?? null,
     completed: t.completed,
+    priority: t.priority,
+    due_date: t.dueDate,
+    list_id: t.listId,
     created_at: t.createdAt,
     updated_at: t.updatedAt,
   }));

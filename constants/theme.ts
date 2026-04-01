@@ -1,3 +1,10 @@
+// Priority indicator colors — semantic, same in light and dark
+export const PRIORITY_COLORS = {
+  low: '#4CAF50',
+  medium: '#FF9800',
+  high: '#F44336',
+} as const;
+
 export interface ThemeColors {
   yellow: string;      // primary accent — same in both themes
   black: string;       // always #111111 — for text on yellow buttons/checkboxes

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   Alert,
   Animated,
@@ -20,11 +20,19 @@ import {
   fetchTodos,
   syncTodos,
   setFilter,
-  Todo,
 } from '@/features/todos/todosSlice';
+import {
+  hydrateLists,
+  fetchLists,
+  syncLists,
+} from '@/features/lists/listsSlice';
+import { selectFilteredSortedTodos } from '@/features/todos/todosSelectors';
 import FilterBar from '@/components/FilterBar';
 import TodoInput from '@/components/TodoInput';
 import TodoItem from '@/components/TodoItem';
+import ListSelector from '@/components/ListSelector';
+import SearchBar from '@/components/SearchBar';
+import SortControls from '@/components/SortControls';
 
 const SIDEBAR_WIDTH = 260;
 
@@ -47,23 +55,23 @@ export default function HomeScreen() {
   const filter = useAppSelector((state) => state.todos.filter);
   const loading = useAppSelector((state) => state.todos.loading);
 
+  // Use the memoized composed selector for rendering
+  const visibleTodos = useAppSelector(selectFilteredSortedTodos);
+
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const translateX = useRef(new Animated.Value(SIDEBAR_WIDTH)).current;
 
   useEffect(() => {
-    if (userId) {
-      dispatch(hydrateTodos(userId)).then(() => {
-        dispatch(fetchTodos(userId));
-        dispatch(syncTodos(userId));
-      });
-    }
+    if (!userId) return;
+    // Startup sequence: local first, then remote
+    dispatch(hydrateLists(userId));
+    dispatch(hydrateTodos(userId)).then(() => {
+      dispatch(fetchLists(userId));
+      dispatch(fetchTodos(userId));
+      dispatch(syncLists(userId));
+      dispatch(syncTodos(userId));
+    });
   }, [userId]);
-
-  const filteredTodos = useMemo<Todo[]>(() => {
-    if (filter === 'completed') return todos.filter((t) => t.completed);
-    if (filter === 'active') return todos.filter((t) => !t.completed);
-    return todos;
-  }, [todos, filter]);
 
   function openSidebar() {
     setSidebarOpen(true);
@@ -86,6 +94,7 @@ export default function HomeScreen() {
     closeSidebar();
     if (userId) {
       await dispatch(syncTodos(userId));
+      await dispatch(syncLists(userId));
     }
     const { error } = await supabase.auth.signOut();
     if (error) Alert.alert('Error', error.message);
@@ -117,11 +126,20 @@ export default function HomeScreen() {
         </TouchableOpacity>
       </View>
 
+      {/* List selector */}
+      <ListSelector />
+
       {/* Add input */}
       <TodoInput />
 
+      {/* Search */}
+      <SearchBar />
+
       {/* Filter bar */}
       <FilterBar filter={filter} onSelect={(f) => dispatch(setFilter(f))} />
+
+      {/* Sort controls */}
+      <SortControls />
 
       {/* Todo list */}
       {loading && todos.length === 0 ? (
@@ -130,14 +148,14 @@ export default function HomeScreen() {
         </View>
       ) : (
         <FlatList
-          data={filteredTodos}
+          data={visibleTodos}
           keyExtractor={(item) => item.id}
           renderItem={({ item }) => <TodoItem todo={item} />}
-          contentContainerStyle={filteredTodos.length === 0 ? styles.emptyList : styles.list}
+          contentContainerStyle={visibleTodos.length === 0 ? styles.emptyList : styles.list}
           ListEmptyComponent={
             <View style={styles.centered}>
               <Text style={styles.emptyText}>
-                {filter === 'all' ? 'No to-dos yet. Add one above!' : `No ${filter} to-dos.`}
+                {filter === 'all' ? 'No to-dos yet. Add one above!' : `No ${filter.replace('_', ' ')} to-dos.`}
               </Text>
             </View>
           }
@@ -180,7 +198,7 @@ function makeStyles(colors: ThemeColors) {
       justifyContent: 'space-between',
       alignItems: 'center',
       paddingHorizontal: 24,
-      marginBottom: 24,
+      marginBottom: 16,
     },
     greetingContainer: {
       flex: 1,
