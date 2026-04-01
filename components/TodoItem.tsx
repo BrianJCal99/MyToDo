@@ -1,10 +1,18 @@
 import { useState } from 'react';
-import { Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import {
+  Modal,
+  Platform,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { Todo, Priority, toggleTodo, updateTodo, deleteTodo } from '@/features/todos/todosSlice';
-import { ThemeColors } from '@/constants/theme';
-import { PRIORITY_COLORS } from '@/constants/theme';
+import { addList } from '@/features/lists/listsSlice';
+import { ThemeColors, PRIORITY_COLORS } from '@/constants/theme';
 import { useThemeColors } from '@/hooks/use-theme-colors';
 import LniIcon from '@/components/LniIcon';
 
@@ -12,12 +20,10 @@ interface Props {
   todo: Todo;
 }
 
-const PRIORITY_LABELS: Record<Priority, string> = { low: 'L', medium: 'M', high: 'H' };
 const PRIORITIES: Priority[] = ['low', 'medium', 'high'];
 
 function formatDate(ts: number): string {
-  const d = new Date(ts);
-  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  return new Date(ts).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 }
 
 export default function TodoItem({ todo }: Props) {
@@ -27,218 +33,318 @@ export default function TodoItem({ todo }: Props) {
 
   const lists = useAppSelector((state) => state.lists.lists);
 
-  const [isEditing, setIsEditing] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
   const [editTitle, setEditTitle] = useState(todo.title);
   const [editDescription, setEditDescription] = useState(todo.description ?? '');
   const [editPriority, setEditPriority] = useState<Priority>(todo.priority);
   const [editDueDate, setEditDueDate] = useState<number | null>(todo.dueDate);
   const [editListId, setEditListId] = useState(todo.listId);
   const [showDatePicker, setShowDatePicker] = useState(false);
+  const [showListPicker, setShowListPicker] = useState(false);
+  const [showNewListModal, setShowNewListModal] = useState(false);
+  const [newListName, setNewListName] = useState('');
 
-  const isOverdue =
-    !todo.completed && todo.dueDate !== null && todo.dueDate < Date.now();
-
+  const isOverdue = !todo.completed && todo.dueDate !== null && todo.dueDate < Date.now();
   const listName = lists.find((l) => l.id === todo.listId)?.name;
 
-  function handleSave() {
-    if (!editTitle.trim()) return;
-    dispatch(
-      updateTodo({
-        id: todo.id,
-        title: editTitle,
-        description: editDescription || undefined,
-        priority: editPriority,
-        dueDate: editDueDate,
-        listId: editListId,
-      })
-    );
-    setIsEditing(false);
-  }
-
-  function handleCancel() {
+  function openEdit() {
     setEditTitle(todo.title);
     setEditDescription(todo.description ?? '');
     setEditPriority(todo.priority);
     setEditDueDate(todo.dueDate);
     setEditListId(todo.listId);
-    setIsEditing(false);
+    setEditOpen(true);
   }
 
-  if (isEditing) {
-    return (
-      <View style={styles.editContainer}>
-        <TextInput
-          style={styles.editInput}
-          value={editTitle}
-          onChangeText={setEditTitle}
-          autoFocus
-          returnKeyType="next"
-          placeholder="Title"
-          placeholderTextColor={colors.placeholder}
-        />
-        <TextInput
-          style={[styles.editInput, styles.editDescriptionInput]}
-          value={editDescription}
-          onChangeText={setEditDescription}
-          placeholder="Description (optional)"
-          placeholderTextColor={colors.placeholder}
-          returnKeyType="done"
-        />
-
-        {/* Priority selector */}
-        <View style={styles.editRow}>
-          <Text style={styles.editRowLabel}>Priority</Text>
-          <View style={styles.priorityRow}>
-            {PRIORITIES.map((p) => (
-              <TouchableOpacity
-                key={p}
-                style={[
-                  styles.priorityChip,
-                  editPriority === p && { backgroundColor: PRIORITY_COLORS[p] },
-                ]}
-                onPress={() => setEditPriority(p)}
-              >
-                <Text
-                  style={[
-                    styles.priorityChipText,
-                    editPriority === p && styles.priorityChipTextActive,
-                  ]}
-                >
-                  {p.charAt(0).toUpperCase() + p.slice(1)}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </View>
-
-        {/* List selector */}
-        <View style={styles.editRow}>
-          <Text style={styles.editRowLabel}>List</Text>
-          <View style={styles.listChipRow}>
-            {lists.map((l) => (
-              <TouchableOpacity
-                key={l.id}
-                style={[styles.priorityChip, editListId === l.id && styles.listChipActive]}
-                onPress={() => setEditListId(l.id)}
-              >
-                <Text
-                  style={[
-                    styles.priorityChipText,
-                    editListId === l.id && styles.priorityChipTextActive,
-                  ]}
-                >
-                  {l.name}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </View>
-
-        {/* Due date selector */}
-        <View style={styles.editRow}>
-          <Text style={styles.editRowLabel}>Due Date</Text>
-          <View style={styles.dueDateRow}>
-            <TouchableOpacity
-              style={styles.dueDateButton}
-              onPress={() => setShowDatePicker(true)}
-            >
-              <Text style={styles.dueDateButtonText}>
-                {editDueDate ? formatDate(editDueDate) : 'Set date'}
-              </Text>
-            </TouchableOpacity>
-            {editDueDate !== null && (
-              <TouchableOpacity onPress={() => setEditDueDate(null)} hitSlop={8}>
-                <LniIcon name="lni-xmark" size={15} color={colors.muted} />
-              </TouchableOpacity>
-            )}
-          </View>
-        </View>
-
-        {showDatePicker && (
-          <DateTimePicker
-            value={editDueDate ? new Date(editDueDate) : new Date()}
-            mode="date"
-            display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-            onChange={(_, date) => {
-              setShowDatePicker(Platform.OS === 'ios');
-              if (date) setEditDueDate(date.getTime());
-            }}
-          />
-        )}
-
-        <View style={styles.editActions}>
-          <TouchableOpacity style={styles.saveButton} onPress={handleSave}>
-            <Text style={styles.saveButtonText}>Save</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.cancelButton} onPress={handleCancel}>
-            <Text style={styles.cancelButtonText}>Cancel</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-    );
+  function handleSave() {
+    if (!editTitle.trim()) return;
+    dispatch(updateTodo({
+      id: todo.id,
+      title: editTitle,
+      description: editDescription || undefined,
+      priority: editPriority,
+      dueDate: editDueDate,
+      listId: editListId,
+    }));
+    setEditOpen(false);
   }
 
   return (
-    <View style={[styles.container, isOverdue && styles.containerOverdue]}>
-      <TouchableOpacity
-        style={[styles.checkbox, todo.completed && styles.checkboxChecked]}
-        onPress={() => dispatch(toggleTodo(todo.id))}
-        activeOpacity={0.7}
-      >
-        {todo.completed && <LniIcon name="lni-check" size={13} color={colors.black} />}
-      </TouchableOpacity>
-
-      <View style={styles.textContainer}>
-        <View style={styles.titleRow}>
-          <View style={[styles.priorityDot, { backgroundColor: PRIORITY_COLORS[todo.priority] }]} />
-          <Text style={[styles.title, todo.completed && styles.titleCompleted]} numberOfLines={2}>
-            {todo.title}
-          </Text>
-        </View>
-
-        {todo.description ? (
-          <Text style={styles.description} numberOfLines={1}>
-            {todo.description}
-          </Text>
-        ) : null}
-
-        <View style={styles.metaRow}>
-          {listName ? (
-            <View style={styles.metaTag}>
-              <Text style={styles.metaTagText}>{listName}</Text>
-            </View>
-          ) : null}
-          {todo.dueDate !== null ? (
-            <View style={[styles.metaTag, styles.metaTagRow, isOverdue && styles.metaTagOverdue]}>
-              {isOverdue && (
-                <LniIcon name="lni-bolt-2" size={10} color="#F44336" style={styles.overdueIcon} />
-              )}
-              <Text style={[styles.metaTagText, isOverdue && styles.metaTagTextOverdue]}>
-                {formatDate(todo.dueDate)}
-              </Text>
-            </View>
-          ) : null}
-        </View>
-      </View>
-
-      <View style={styles.actions}>
-        <TouchableOpacity style={styles.actionButton} onPress={() => setIsEditing(true)} hitSlop={8}>
-          <LniIcon name="lni-pen-to-square" size={18} color={colors.muted} />
-        </TouchableOpacity>
+    <>
+      {/* ── Todo card ──────────────────────────────────────────────────────── */}
+      <View style={[styles.container, isOverdue && styles.containerOverdue]}>
         <TouchableOpacity
-          style={styles.actionButton}
-          onPress={() => dispatch(deleteTodo(todo.id))}
-          hitSlop={8}
+          style={[styles.checkbox, todo.completed && styles.checkboxChecked]}
+          onPress={() => dispatch(toggleTodo(todo.id))}
+          activeOpacity={0.7}
         >
-          <LniIcon name="lni-trash-3" size={18} color={colors.muted} />
+          {todo.completed && <LniIcon name="lni-check" size={13} color={colors.black} />}
         </TouchableOpacity>
+
+        <View style={styles.textContainer}>
+          <View style={styles.titleRow}>
+            <View style={[styles.priorityDot, { backgroundColor: PRIORITY_COLORS[todo.priority] }]} />
+            <Text style={[styles.title, todo.completed && styles.titleCompleted]} numberOfLines={2}>
+              {todo.title}
+            </Text>
+          </View>
+
+          {todo.description ? (
+            <Text style={styles.description} numberOfLines={1}>{todo.description}</Text>
+          ) : null}
+
+          <View style={styles.metaRow}>
+            {listName ? (
+              <View style={styles.metaTag}>
+                <Text style={styles.metaTagText}>{listName}</Text>
+              </View>
+            ) : null}
+            {todo.dueDate !== null ? (
+              <View style={[styles.metaTag, styles.metaTagRow, isOverdue && styles.metaTagOverdue]}>
+                {isOverdue && <LniIcon name="lni-bolt-2" size={10} color="#F44336" />}
+                <Text style={[styles.metaTagText, isOverdue && styles.metaTagTextOverdue]}>
+                  {formatDate(todo.dueDate)}
+                </Text>
+              </View>
+            ) : null}
+          </View>
+        </View>
+
+        <View style={styles.actions}>
+          <TouchableOpacity style={styles.actionButton} onPress={openEdit} hitSlop={8}>
+            <LniIcon name="lni-pen-to-square" size={18} color={colors.muted} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.actionButton}
+            onPress={() => dispatch(deleteTodo(todo.id))}
+            hitSlop={8}
+          >
+            <LniIcon name="lni-trash-3" size={18} color={colors.muted} />
+          </TouchableOpacity>
+        </View>
       </View>
-    </View>
+
+      {/* ── Edit modal ─────────────────────────────────────────────────────── */}
+      <Modal
+        visible={editOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setEditOpen(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setEditOpen(false)}
+        >
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Edit Todo</Text>
+
+            <TextInput
+              style={styles.modalInput}
+              value={editTitle}
+              onChangeText={setEditTitle}
+              autoFocus
+              returnKeyType="next"
+              placeholder="Title"
+              placeholderTextColor={colors.placeholder}
+            />
+
+            <TextInput
+              style={[styles.modalInput, styles.modalInputMultiline]}
+              value={editDescription}
+              onChangeText={setEditDescription}
+              placeholder="Description (optional)"
+              placeholderTextColor={colors.placeholder}
+              returnKeyType="done"
+              multiline
+            />
+
+            {/* Priority */}
+            <View style={styles.editRow}>
+              <Text style={styles.editRowLabel}>Priority</Text>
+              <View style={styles.priorityRow}>
+                {PRIORITIES.map((p) => (
+                  <TouchableOpacity
+                    key={p}
+                    style={[
+                      styles.priorityChip,
+                      editPriority === p && { backgroundColor: PRIORITY_COLORS[p], borderColor: PRIORITY_COLORS[p] },
+                    ]}
+                    onPress={() => setEditPriority(p)}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[styles.priorityChipText, editPriority === p && styles.priorityChipTextActive]}>
+                      {p.charAt(0).toUpperCase() + p.slice(1)}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+
+            {/* List */}
+            <View style={styles.editRow}>
+              <Text style={styles.editRowLabel}>List</Text>
+              <TouchableOpacity
+                style={styles.dropdownButton}
+                onPress={() => setShowListPicker(true)}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.dropdownButtonText}>
+                  {lists.find((l) => l.id === editListId)?.name ?? 'Inbox'}
+                </Text>
+                <LniIcon name="lni-chevron-down" size={13} color={colors.muted} />
+              </TouchableOpacity>
+            </View>
+
+            {/* Due date */}
+            <View style={styles.editRow}>
+              <Text style={styles.editRowLabel}>Due Date</Text>
+              <View style={styles.dueDateRow}>
+                <TouchableOpacity style={styles.dueDateButton} onPress={() => setShowDatePicker(true)}>
+                  <Text style={styles.dueDateButtonText}>
+                    {editDueDate ? formatDate(editDueDate) : 'Set date'}
+                  </Text>
+                </TouchableOpacity>
+                {editDueDate !== null && (
+                  <TouchableOpacity onPress={() => setEditDueDate(null)} hitSlop={8}>
+                    <LniIcon name="lni-xmark" size={15} color={colors.muted} />
+                  </TouchableOpacity>
+                )}
+              </View>
+            </View>
+
+            {showDatePicker && (
+              <DateTimePicker
+                value={editDueDate ? new Date(editDueDate) : new Date()}
+                mode="date"
+                display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                onChange={(_, date) => {
+                  setShowDatePicker(Platform.OS === 'ios');
+                  if (date) setEditDueDate(date.getTime());
+                }}
+              />
+            )}
+
+            <View style={styles.modalActions}>
+              <TouchableOpacity style={styles.modalCancel} onPress={() => setEditOpen(false)}>
+                <Text style={styles.modalCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalSave, !editTitle.trim() && styles.modalSaveDisabled]}
+                onPress={handleSave}
+                disabled={!editTitle.trim()}
+              >
+                <Text style={styles.modalSaveText}>Save</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* ── List picker ────────────────────────────────────────────────────── */}
+      <Modal
+        visible={showListPicker}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowListPicker(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowListPicker(false)}
+        >
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Move to List</Text>
+            {lists.map((l) => {
+              const selected = l.id === editListId;
+              return (
+                <TouchableOpacity
+                  key={l.id}
+                  style={styles.pickerOption}
+                  onPress={() => { setEditListId(l.id); setShowListPicker(false); }}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[styles.pickerOptionText, selected && styles.pickerOptionTextActive]}>
+                    {l.name}
+                  </Text>
+                  {selected && <LniIcon name="lni-check" size={15} color={colors.yellow} />}
+                </TouchableOpacity>
+              );
+            })}
+            <TouchableOpacity
+              style={styles.newListButton}
+              onPress={() => { setShowListPicker(false); setShowNewListModal(true); }}
+              activeOpacity={0.7}
+            >
+              <LniIcon name="lni-plus" size={15} color={colors.yellow} />
+              <Text style={styles.newListButtonText}>New List</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+      {/* ── New List modal ─────────────────────────────────────────────────── */}
+      <Modal
+        visible={showNewListModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowNewListModal(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowNewListModal(false)}
+        >
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>New List</Text>
+            <TextInput
+              style={styles.modalInput}
+              value={newListName}
+              onChangeText={setNewListName}
+              placeholder="List name"
+              placeholderTextColor={colors.placeholder}
+              autoFocus
+              returnKeyType="done"
+              onSubmitEditing={async () => {
+                const name = newListName.trim();
+                if (!name) return;
+                const result = await dispatch(addList(name)).unwrap();
+                setEditListId(result.id);
+                setNewListName('');
+                setShowNewListModal(false);
+              }}
+            />
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={styles.modalCancel}
+                onPress={() => { setNewListName(''); setShowNewListModal(false); }}
+              >
+                <Text style={styles.modalCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalSave, !newListName.trim() && styles.modalSaveDisabled]}
+                disabled={!newListName.trim()}
+                onPress={async () => {
+                  const name = newListName.trim();
+                  if (!name) return;
+                  const result = await dispatch(addList(name)).unwrap();
+                  setEditListId(result.id);
+                  setNewListName('');
+                  setShowNewListModal(false);
+                }}
+              >
+                <Text style={styles.modalSaveText}>Create</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+    </>
   );
 }
 
 function makeStyles(colors: ThemeColors) {
   return StyleSheet.create({
+    // ── Card ──────────────────────────────────────────────────────────────────
     container: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -325,9 +431,6 @@ function makeStyles(colors: ThemeColors) {
     metaTagOverdue: {
       backgroundColor: 'rgba(244,67,54,0.1)',
     },
-    overdueIcon: {
-      // ensures the bolt icon sits inline with the text
-    },
     actions: {
       flexDirection: 'row',
       gap: 4,
@@ -335,36 +438,77 @@ function makeStyles(colors: ThemeColors) {
     actionButton: {
       padding: 4,
     },
-    // ─── Edit mode ──────────────────────────────────────────────────────────
-    editContainer: {
-      backgroundColor: colors.surface,
-      borderRadius: 12,
-      padding: 14,
-      marginHorizontal: 24,
-      marginBottom: 10,
-      borderWidth: 1,
-      borderColor: colors.yellow,
+    // ── Modal ─────────────────────────────────────────────────────────────────
+    modalOverlay: {
+      flex: 1,
+      backgroundColor: 'rgba(0,0,0,0.5)',
+      justifyContent: 'center',
+      paddingHorizontal: 32,
     },
-    editInput: {
+    modalCard: {
+      backgroundColor: colors.surface,
+      borderRadius: 16,
+      padding: 24,
+    },
+    modalTitle: {
+      fontSize: 17,
+      fontWeight: '700',
+      color: colors.text,
+      marginBottom: 16,
+    },
+    modalInput: {
       borderWidth: 1,
       borderColor: colors.border,
-      borderRadius: 8,
-      paddingHorizontal: 10,
-      paddingVertical: 8,
+      borderRadius: 10,
+      paddingHorizontal: 12,
+      paddingVertical: 10,
       fontSize: 15,
       color: colors.text,
       backgroundColor: colors.background,
-      marginBottom: 8,
+      marginBottom: 12,
     },
-    editDescriptionInput: {
+    modalInputMultiline: {
+      minHeight: 56,
+      textAlignVertical: 'top',
       fontSize: 13,
-      color: colors.muted,
     },
+    modalActions: {
+      flexDirection: 'row',
+      gap: 10,
+      justifyContent: 'flex-end',
+      marginTop: 4,
+    },
+    modalCancel: {
+      paddingHorizontal: 16,
+      paddingVertical: 9,
+      borderRadius: 8,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    modalCancelText: {
+      color: colors.muted,
+      fontSize: 14,
+    },
+    modalSave: {
+      paddingHorizontal: 16,
+      paddingVertical: 9,
+      borderRadius: 8,
+      backgroundColor: colors.yellow,
+    },
+    modalSaveDisabled: {
+      backgroundColor: colors.disabled,
+    },
+    modalSaveText: {
+      color: colors.black,
+      fontWeight: '800',
+      fontSize: 14,
+    },
+    // ── Edit fields ───────────────────────────────────────────────────────────
     editRow: {
       flexDirection: 'row',
       alignItems: 'center',
-      marginBottom: 10,
       gap: 10,
+      marginBottom: 12,
     },
     editRowLabel: {
       fontSize: 13,
@@ -375,30 +519,38 @@ function makeStyles(colors: ThemeColors) {
       flexDirection: 'row',
       gap: 6,
     },
-    listChipRow: {
-      flexDirection: 'row',
-      flexWrap: 'wrap',
-      gap: 6,
-      flex: 1,
-    },
-    listChipActive: {
-      backgroundColor: colors.yellow,
-      borderColor: colors.yellow,
-    },
     priorityChip: {
-      paddingHorizontal: 10,
-      paddingVertical: 4,
+      paddingHorizontal: 12,
+      paddingVertical: 6,
       borderRadius: 8,
       borderWidth: 1,
       borderColor: colors.border,
     },
     priorityChipText: {
-      fontSize: 12,
+      fontSize: 13,
       color: colors.muted,
       fontWeight: '600',
     },
     priorityChipTextActive: {
       color: '#fff',
+      fontWeight: '700',
+    },
+    dropdownButton: {
+      flex: 1,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 8,
+      paddingHorizontal: 10,
+      paddingVertical: 8,
+      backgroundColor: colors.background,
+    },
+    dropdownButtonText: {
+      flex: 1,
+      fontSize: 13,
+      color: colors.text,
     },
     dueDateRow: {
       flexDirection: 'row',
@@ -407,7 +559,7 @@ function makeStyles(colors: ThemeColors) {
     },
     dueDateButton: {
       paddingHorizontal: 10,
-      paddingVertical: 4,
+      paddingVertical: 6,
       borderRadius: 8,
       borderWidth: 1,
       borderColor: colors.border,
@@ -417,33 +569,33 @@ function makeStyles(colors: ThemeColors) {
       fontSize: 13,
       color: colors.text,
     },
-    editActions: {
+    // ── List picker ───────────────────────────────────────────────────────────
+    pickerOption: {
       flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingVertical: 14,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border,
+    },
+    pickerOptionText: {
+      fontSize: 16,
+      color: colors.text,
+    },
+    pickerOptionTextActive: {
+      fontWeight: '700',
+      color: colors.yellow,
+    },
+    newListButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
       gap: 8,
-      justifyContent: 'flex-end',
-      marginTop: 4,
+      paddingVertical: 14,
     },
-    saveButton: {
-      backgroundColor: colors.yellow,
-      borderRadius: 8,
-      paddingHorizontal: 16,
-      paddingVertical: 8,
-    },
-    saveButtonText: {
-      color: colors.black,
-      fontWeight: '800',
-      fontSize: 14,
-    },
-    cancelButton: {
-      borderWidth: 1,
-      borderColor: colors.border,
-      borderRadius: 8,
-      paddingHorizontal: 16,
-      paddingVertical: 8,
-    },
-    cancelButtonText: {
-      color: colors.muted,
-      fontSize: 14,
+    newListButtonText: {
+      fontSize: 15,
+      color: colors.yellow,
+      fontWeight: '600',
     },
   });
 }

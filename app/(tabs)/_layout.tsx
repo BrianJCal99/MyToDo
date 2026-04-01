@@ -5,6 +5,8 @@ export default function TabLayout() {
     <Tabs screenOptions={{ headerShown: false, tabBarStyle: { display: 'none' } }}>
       <Tabs.Screen name="index" />
       <Tabs.Screen name="account" />
+      <Tabs.Screen name="search" />
+      <Tabs.Screen name="list/[id]" />
     </Tabs>
   );
 }
