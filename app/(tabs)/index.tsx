@@ -20,6 +20,7 @@ import { ThemeColors, PRIORITY_COLORS } from '@/constants/theme';
 import { useThemeColors } from '@/hooks/use-theme-colors';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { addTodo, hydrateTodos, fetchTodos, syncTodos, Priority } from '@/features/todos/todosSlice';
+import { REMINDER_OPTIONS, getReminderLabel } from '@/services/notificationsService';
 import {
   hydrateLists,
   fetchLists,
@@ -76,7 +77,9 @@ export default function HomeScreen() {
   const [addPriority, setAddPriority] = useState<Priority>('medium');
   const [addDueDate, setAddDueDate] = useState<number | null>(null);
   const [addListId, setAddListId] = useState<string>(DEFAULT_LIST_ID);
+  const [addReminderOffset, setAddReminderOffset] = useState<number | null>(null);
   const [showListPicker, setShowListPicker] = useState(false);
+  const [showReminderPicker, setShowReminderPicker] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
   // ── Create List modal ──────────────────────────────────────────────────────
@@ -151,6 +154,7 @@ export default function HomeScreen() {
     setAddPriority('medium');
     setAddDueDate(null);
     setAddListId(DEFAULT_LIST_ID);
+    setAddReminderOffset(null);
     setShowDatePicker(false);
     setShowTimePicker(false);
     setAddSheetOpen(true);
@@ -164,6 +168,7 @@ export default function HomeScreen() {
       priority: addPriority,
       dueDate: addDueDate,
       listId: addListId,
+      reminderOffset: addReminderOffset,
     }));
     setAddSheetOpen(false);
   }
@@ -404,6 +409,24 @@ export default function HomeScreen() {
               </View>
             )}
 
+            {/* Reminder (only when due date is set) */}
+            {addDueDate !== null && (
+              <View style={styles.editRow}>
+                <Text style={styles.editRowLabel}>Reminder</Text>
+                <TouchableOpacity
+                  style={styles.dropdownButton}
+                  onPress={() => setShowReminderPicker(true)}
+                  activeOpacity={0.7}
+                >
+                  <LniIcon name="lni-alarm-1" size={13} color={colors.muted} />
+                  <Text style={styles.dropdownButtonText}>
+                    {getReminderLabel(addReminderOffset)}
+                  </Text>
+                  <LniIcon name="lni-chevron-down" size={13} color={colors.muted} />
+                </TouchableOpacity>
+              </View>
+            )}
+
             {showDatePicker && (
               <DateTimePicker
                 value={addDueDate ? new Date(addDueDate) : new Date()}
@@ -502,6 +525,40 @@ export default function HomeScreen() {
         </TouchableOpacity>
       </Modal>
 
+      {/* ── Reminder picker modal ───────────────────────────────────────── */}
+      <Modal
+        visible={showReminderPicker}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowReminderPicker(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowReminderPicker(false)}
+        >
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Remind Me</Text>
+            {REMINDER_OPTIONS.map((option) => {
+              const selected = addReminderOffset === option.value;
+              return (
+                <TouchableOpacity
+                  key={String(option.value)}
+                  style={styles.pickerOption}
+                  onPress={() => { setAddReminderOffset(option.value); setShowReminderPicker(false); }}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[styles.pickerOptionText, selected && styles.pickerOptionTextActive]}>
+                    {option.label}
+                  </Text>
+                  {selected && <LniIcon name="lni-check" size={15} color={colors.yellow} />}
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
       {/* ── Create List modal (from Lists header) ───────────────────────── */}
       <Modal
         visible={createListModalVisible}
@@ -560,6 +617,12 @@ export default function HomeScreen() {
           onPress={() => { closeSidebar(); router.push('/(tabs)/account'); }}
         >
           <Text style={styles.sidebarItemText}>Account</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.sidebarItem}
+          onPress={() => { closeSidebar(); router.push('/(tabs)/settings'); }}
+        >
+          <Text style={styles.sidebarItemText}>Settings</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.sidebarItem} onPress={handleLogout}>
           <Text style={styles.sidebarItemText}>Log Out</Text>

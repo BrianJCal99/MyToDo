@@ -9,11 +9,12 @@ interface SupabaseTodoRow {
   description: string | null;
   completed: boolean;
   priority: Priority | null;
-  due_date: string | null;  // date    → "YYYY-MM-DD"
-  due_time: string | null;  // timetz  → "HH:MM:SS+HH" — null means date-only
+  due_date: string | null;      // date    → "YYYY-MM-DD"
+  due_time: string | null;      // timetz  → "HH:MM:SS+HH" — null means date-only
   list_id: string | null;
-  created_at: string;       // timestamptz → ISO 8601 string
-  updated_at: string;       // timestamptz → ISO 8601 string
+  created_at: string;           // timestamptz → ISO 8601 string
+  updated_at: string;           // timestamptz → ISO 8601 string
+  reminder_offset: number | null; // minutes before dueDate to send notification
 }
 
 // Reconstruct a local-time ms timestamp from the separate date and time columns.
@@ -55,6 +56,9 @@ function rowToTodo(row: SupabaseTodoRow): Todo {
     createdAt: new Date(row.created_at).getTime(),
     updatedAt: new Date(row.updated_at).getTime(),
     synced: true,
+    reminderOffset: row.reminder_offset ?? null,
+    reminderId: null,          // device-local — never stored in the DB
+    dueNotificationId: null,   // device-local — never stored in the DB
   };
 }
 
@@ -88,6 +92,7 @@ export async function upsertTodosToSupabase(todos: Todo[], userId: string): Prom
       list_id: t.listId,
       created_at: new Date(t.createdAt).toISOString(),
       updated_at: new Date(t.updatedAt).toISOString(),
+      reminder_offset: t.reminderOffset ?? null,
     };
   });
 

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import {
+  Alert,
   Modal,
   Platform,
   StyleSheet,
@@ -15,6 +16,7 @@ import { addList } from '@/features/lists/listsSlice';
 import { ThemeColors, PRIORITY_COLORS } from '@/constants/theme';
 import { useThemeColors } from '@/hooks/use-theme-colors';
 import LniIcon from '@/components/LniIcon';
+import { REMINDER_OPTIONS, getReminderLabel } from '@/services/notificationsService';
 
 interface Props {
   todo: Todo;
@@ -49,9 +51,11 @@ export default function TodoItem({ todo }: Props) {
   const [editPriority, setEditPriority] = useState<Priority>(todo.priority);
   const [editDueDate, setEditDueDate] = useState<number | null>(todo.dueDate);
   const [editListId, setEditListId] = useState(todo.listId);
+  const [editReminderOffset, setEditReminderOffset] = useState<number | null>(todo.reminderOffset);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
   const [showListPicker, setShowListPicker] = useState(false);
+  const [showReminderPicker, setShowReminderPicker] = useState(false);
   const [showNewListModal, setShowNewListModal] = useState(false);
   const [newListName, setNewListName] = useState('');
 
@@ -64,6 +68,7 @@ export default function TodoItem({ todo }: Props) {
     setEditPriority(todo.priority);
     setEditDueDate(todo.dueDate);
     setEditListId(todo.listId);
+    setEditReminderOffset(todo.reminderOffset);
     setShowDatePicker(false);
     setShowTimePicker(false);
     setEditOpen(true);
@@ -78,6 +83,7 @@ export default function TodoItem({ todo }: Props) {
       priority: editPriority,
       dueDate: editDueDate,
       listId: editListId,
+      reminderOffset: editReminderOffset,
     }));
     setEditOpen(false);
   }
@@ -120,6 +126,12 @@ export default function TodoItem({ todo }: Props) {
                 </Text>
               </View>
             ) : null}
+            {todo.reminderOffset !== null && todo.dueDate !== null ? (
+              <View style={[styles.metaTag, styles.metaTagRow]}>
+                <LniIcon name="lni-alarm-1" size={10} color="#888" />
+                <Text style={styles.metaTagText}>{getReminderLabel(todo.reminderOffset)}</Text>
+              </View>
+            ) : null}
           </View>
         </View>
 
@@ -129,7 +141,12 @@ export default function TodoItem({ todo }: Props) {
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.actionButton}
-            onPress={() => dispatch(deleteTodo(todo.id))}
+            onPress={() =>
+              Alert.alert('Delete Task', `Delete "${todo.title}"?`, [
+                { text: 'Cancel', style: 'cancel' },
+                { text: 'Delete', style: 'destructive', onPress: () => dispatch(deleteTodo(todo.id)) },
+              ])
+            }
             hitSlop={8}
           >
             <LniIcon name="lni-trash-3" size={18} color={colors.muted} />
@@ -254,6 +271,24 @@ export default function TodoItem({ todo }: Props) {
               </View>
             )}
 
+            {/* Reminder (only when due date is set) */}
+            {editDueDate !== null && (
+              <View style={styles.editRow}>
+                <Text style={styles.editRowLabel}>Reminder</Text>
+                <TouchableOpacity
+                  style={styles.dropdownButton}
+                  onPress={() => setShowReminderPicker(true)}
+                  activeOpacity={0.7}
+                >
+                  <LniIcon name="lni-alarm-1" size={13} color={colors.muted} />
+                  <Text style={styles.dropdownButtonText}>
+                    {getReminderLabel(editReminderOffset)}
+                  </Text>
+                  <LniIcon name="lni-chevron-down" size={13} color={colors.muted} />
+                </TouchableOpacity>
+              </View>
+            )}
+
             {showDatePicker && (
               <DateTimePicker
                 value={editDueDate ? new Date(editDueDate) : new Date()}
@@ -303,6 +338,40 @@ export default function TodoItem({ todo }: Props) {
                 <Text style={styles.modalSaveText}>Save</Text>
               </TouchableOpacity>
             </View>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* ── Reminder picker ────────────────────────────────────────────────── */}
+      <Modal
+        visible={showReminderPicker}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowReminderPicker(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowReminderPicker(false)}
+        >
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Remind Me</Text>
+            {REMINDER_OPTIONS.map((option) => {
+              const selected = editReminderOffset === option.value;
+              return (
+                <TouchableOpacity
+                  key={String(option.value)}
+                  style={styles.pickerOption}
+                  onPress={() => { setEditReminderOffset(option.value); setShowReminderPicker(false); }}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[styles.pickerOptionText, selected && styles.pickerOptionTextActive]}>
+                    {option.label}
+                  </Text>
+                  {selected && <LniIcon name="lni-check" size={15} color={colors.yellow} />}
+                </TouchableOpacity>
+              );
+            })}
           </View>
         </TouchableOpacity>
       </Modal>

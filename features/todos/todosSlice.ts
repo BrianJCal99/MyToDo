@@ -5,6 +5,7 @@ import {
   upsertTodosToSupabase,
   deleteTodoFromSupabase,
 } from '@/services/todosService';
+import { scheduleReminder, scheduleDueNotification, cancelReminder } from '@/services/notificationsService';
 import { DEFAULT_LIST_ID } from '@/features/lists/listsSlice';
 
 export type Priority = 'low' | 'medium' | 'high';
@@ -23,6 +24,9 @@ export interface Todo {
   createdAt: number;
   updatedAt: number;
   synced: boolean;
+  reminderOffset: number | null; // minutes before dueDate to fire notification
+  reminderId: string | null;     // expo notification identifier (device-local, not synced)
+  dueNotificationId: string | null; // "task due" notification fired at the due date/time
 }
 
 export interface TodosState {
@@ -66,6 +70,9 @@ function migrateTodo(raw: Record<string, unknown>): Todo {
     createdAt: (raw.createdAt as number) ?? Date.now(),
     updatedAt: (raw.updatedAt as number) ?? Date.now(),
     synced: (raw.synced as boolean) ?? false,
+    reminderOffset: (raw.reminderOffset as number | null) ?? null,
+    reminderId: (raw.reminderId as string | null) ?? null,
+    dueNotificationId: (raw.dueNotificationId as string | null) ?? null,
   };
 }
 
@@ -74,7 +81,12 @@ function mergeTodoLists(local: Todo[], remote: Todo[]): Todo[] {
   for (const remoteTodo of remote) {
     const existing = map.get(remoteTodo.id);
     if (!existing || remoteTodo.updatedAt > existing.updatedAt) {
-      map.set(remoteTodo.id, remoteTodo);
+      // Preserve device-local notification IDs when adopting the remote version
+      map.set(remoteTodo.id, {
+        ...remoteTodo,
+        reminderId: existing?.reminderId ?? null,
+        dueNotificationId: existing?.dueNotificationId ?? null,
+      });
     }
   }
   return Array.from(map.values()).sort((a, b) => b.createdAt - a.createdAt);
@@ -117,25 +129,43 @@ export const addTodo = createAsyncThunk(
     listId,
     priority,
     dueDate,
+    reminderOffset,
   }: {
     title: string;
     description?: string;
     listId?: string;
     priority?: Priority;
     dueDate?: number | null;
+    reminderOffset?: number | null;
   }): Promise<Todo> => {
     const now = Date.now();
+    const id = generateId();
+    const effectiveDueDate = dueDate ?? null;
+    const effectiveOffset = effectiveDueDate !== null ? (reminderOffset ?? null) : null;
+
+    let reminderId: string | null = null;
+    let dueNotificationId: string | null = null;
+    if (effectiveDueDate !== null) {
+      dueNotificationId = await scheduleDueNotification(id, title.trim(), effectiveDueDate);
+      if (effectiveOffset !== null) {
+        reminderId = await scheduleReminder(id, title.trim(), effectiveDueDate, effectiveOffset);
+      }
+    }
+
     return {
-      id: generateId(),
+      id,
       title: title.trim(),
       description: description?.trim() || undefined,
       completed: false,
       priority: priority ?? 'medium',
-      dueDate: dueDate ?? null,
+      dueDate: effectiveDueDate,
       listId: listId ?? DEFAULT_LIST_ID,
       createdAt: now,
       updatedAt: now,
       synced: false,
+      reminderOffset: effectiveOffset,
+      reminderId,
+      dueNotificationId,
     };
   }
 );
@@ -149,6 +179,7 @@ export const updateTodo = createAsyncThunk(
     priority,
     dueDate,
     listId,
+    reminderOffset,
   }: {
     id: string;
     title: string;
@@ -156,7 +187,30 @@ export const updateTodo = createAsyncThunk(
     priority?: Priority;
     dueDate?: number | null;
     listId?: string;
-  }) => {
+    reminderOffset?: number | null;
+  }, { getState }) => {
+    const state = getState() as { todos: TodosState };
+    const existing = state.todos.todos.find((t) => t.id === id);
+
+    // Cancel any existing notifications first
+    if (existing?.reminderId) await cancelReminder(existing.reminderId);
+    if (existing?.dueNotificationId) await cancelReminder(existing.dueNotificationId);
+
+    const effectiveDueDate = dueDate !== undefined ? dueDate : (existing?.dueDate ?? null);
+    // If dueDate is cleared, also clear the reminder offset
+    const effectiveOffset = effectiveDueDate === null
+      ? null
+      : (reminderOffset !== undefined ? reminderOffset : (existing?.reminderOffset ?? null));
+
+    let reminderId: string | null = null;
+    let dueNotificationId: string | null = null;
+    if (effectiveDueDate !== null) {
+      dueNotificationId = await scheduleDueNotification(id, title.trim(), effectiveDueDate);
+      if (effectiveOffset !== null) {
+        reminderId = await scheduleReminder(id, title.trim(), effectiveDueDate, effectiveOffset);
+      }
+    }
+
     return {
       id,
       title: title.trim(),
@@ -164,19 +218,47 @@ export const updateTodo = createAsyncThunk(
       priority,
       dueDate,
       listId,
+      reminderOffset: effectiveOffset,
+      reminderId,
+      dueNotificationId,
       updatedAt: Date.now(),
     };
   }
 );
 
-export const deleteTodo = createAsyncThunk('todos/delete', async (id: string) => {
+export const deleteTodo = createAsyncThunk('todos/delete', async (id: string, { getState }) => {
+  const state = getState() as { todos: TodosState };
+  const existing = state.todos.todos.find((t) => t.id === id);
+  if (existing?.reminderId) await cancelReminder(existing.reminderId);
+  if (existing?.dueNotificationId) await cancelReminder(existing.dueNotificationId);
   // Fire-and-forget — tolerate offline failures
   deleteTodoFromSupabase(id).catch(() => {});
   return id;
 });
 
-export const toggleTodo = createAsyncThunk('todos/toggle', async (id: string) => {
-  return { id, updatedAt: Date.now() };
+export const toggleTodo = createAsyncThunk('todos/toggle', async (id: string, { getState }) => {
+  const state = getState() as { todos: TodosState };
+  const todo = state.todos.todos.find((t) => t.id === id);
+  let reminderId = todo?.reminderId ?? null;
+  let dueNotificationId = todo?.dueNotificationId ?? null;
+
+  if (todo) {
+    if (!todo.completed) {
+      // Completing → cancel both notifications
+      if (reminderId) { await cancelReminder(reminderId); reminderId = null; }
+      if (dueNotificationId) { await cancelReminder(dueNotificationId); dueNotificationId = null; }
+    } else {
+      // Un-completing → reschedule both if applicable
+      if (todo.dueDate !== null) {
+        dueNotificationId = await scheduleDueNotification(todo.id, todo.title, todo.dueDate);
+        if (todo.reminderOffset !== null) {
+          reminderId = await scheduleReminder(todo.id, todo.title, todo.dueDate, todo.reminderOffset);
+        }
+      }
+    }
+  }
+
+  return { id, updatedAt: Date.now(), reminderId, dueNotificationId };
 });
 
 // ─── Slice ───────────────────────────────────────────────────────────────────
@@ -229,7 +311,8 @@ const todosSlice = createSlice({
         state.todos = state.todos.map((local) => {
           const server = serverMap.get(local.id);
           if (!server) return local;
-          return { ...server, synced: true };
+          // Preserve device-local notification IDs — never stored on the server
+          return { ...server, synced: true, reminderId: local.reminderId, dueNotificationId: local.dueNotificationId };
         });
       })
       // add
@@ -238,7 +321,7 @@ const todosSlice = createSlice({
       })
       // update
       .addCase(updateTodo.fulfilled, (state, action) => {
-        const { id, title, description, priority, dueDate, listId, updatedAt } = action.payload;
+        const { id, title, description, priority, dueDate, listId, reminderOffset, reminderId, dueNotificationId, updatedAt } = action.payload;
         const todo = state.todos.find((t) => t.id === id);
         if (todo) {
           todo.title = title;
@@ -246,6 +329,9 @@ const todosSlice = createSlice({
           if (priority !== undefined) todo.priority = priority;
           if (dueDate !== undefined) todo.dueDate = dueDate;
           if (listId !== undefined) todo.listId = listId;
+          todo.reminderOffset = reminderOffset;
+          todo.reminderId = reminderId;
+          todo.dueNotificationId = dueNotificationId;
           todo.updatedAt = updatedAt;
           todo.synced = false;
         }
@@ -256,10 +342,12 @@ const todosSlice = createSlice({
       })
       // toggle
       .addCase(toggleTodo.fulfilled, (state, action) => {
-        const { id, updatedAt } = action.payload;
+        const { id, updatedAt, reminderId, dueNotificationId } = action.payload;
         const todo = state.todos.find((t) => t.id === id);
         if (todo) {
           todo.completed = !todo.completed;
+          todo.reminderId = reminderId;
+          todo.dueNotificationId = dueNotificationId;
           todo.updatedAt = updatedAt;
           todo.synced = false;
         }

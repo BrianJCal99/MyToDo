@@ -14,6 +14,7 @@ import { setUser, clearUser } from '@/store/userSlice';
 import { clearTodos } from '@/features/todos/todosSlice';
 import { clearLists } from '@/features/lists/listsSlice';
 import { clearTodosFromStorage, clearListsFromStorage, clearPrefsFromStorage } from '@/services/storage';
+import { requestNotificationPermissions } from '@/services/notificationsService';
 import { supabase } from '@/lib/supabase';
 
 function RootLayoutNav() {
@@ -40,6 +41,7 @@ function RootLayoutNav() {
             email: session.user.email ?? '',
           })
         );
+        requestNotificationPermissions();
       }
       setIsReady(true);
     });
@@ -56,6 +58,7 @@ function RootLayoutNav() {
             email: session.user.email ?? '',
           })
         );
+        requestNotificationPermissions();
       } else {
         // Capture userId before wiping user state so we can clear the right storage key
         const userId = store.getState().user.id;
