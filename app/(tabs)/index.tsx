@@ -34,8 +34,9 @@ import LniIcon from '@/components/LniIcon';
 const SIDEBAR_WIDTH = 260;
 const PRIORITIES: Priority[] = ['low', 'medium', 'high'];
 
-function formatDate(ts: number): string {
-  return new Date(ts).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+function hasTimeSet(ts: number): boolean {
+  const d = new Date(ts);
+  return d.getHours() !== 0 || d.getMinutes() !== 0;
 }
 
 type HomeItem =
@@ -77,6 +78,7 @@ export default function HomeScreen() {
   const [addListId, setAddListId] = useState<string>(DEFAULT_LIST_ID);
   const [showListPicker, setShowListPicker] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
+  const [showTimePicker, setShowTimePicker] = useState(false);
   // ── Create List modal ──────────────────────────────────────────────────────
   const [createListModalVisible, setCreateListModalVisible] = useState(false);
   const [createListName, setCreateListName] = useState('');
@@ -149,6 +151,8 @@ export default function HomeScreen() {
     setAddPriority('medium');
     setAddDueDate(null);
     setAddListId(DEFAULT_LIST_ID);
+    setShowDatePicker(false);
+    setShowTimePicker(false);
     setAddSheetOpen(true);
   }
 
@@ -361,16 +365,44 @@ export default function HomeScreen() {
               <View style={styles.dueDateRow}>
                 <TouchableOpacity style={styles.dueDateButton} onPress={() => setShowDatePicker(true)}>
                   <Text style={styles.dueDateButtonText}>
-                    {addDueDate ? formatDate(addDueDate) : 'Set date'}
+                    {addDueDate ? new Date(addDueDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : 'Set date'}
                   </Text>
                 </TouchableOpacity>
                 {addDueDate !== null && (
-                  <TouchableOpacity onPress={() => setAddDueDate(null)} hitSlop={8}>
+                  <TouchableOpacity onPress={() => { setAddDueDate(null); setShowTimePicker(false); }} hitSlop={8}>
                     <LniIcon name="lni-xmark" size={15} color={colors.muted} />
                   </TouchableOpacity>
                 )}
               </View>
             </View>
+
+            {/* Due time (only when date is set) */}
+            {addDueDate !== null && (
+              <View style={styles.editRow}>
+                <Text style={styles.editRowLabel}>Due Time</Text>
+                <View style={styles.dueDateRow}>
+                  <TouchableOpacity style={styles.dueDateButton} onPress={() => setShowTimePicker(true)}>
+                    <Text style={styles.dueDateButtonText}>
+                      {hasTimeSet(addDueDate)
+                        ? new Date(addDueDate).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
+                        : 'Set time'}
+                    </Text>
+                  </TouchableOpacity>
+                  {hasTimeSet(addDueDate) && (
+                    <TouchableOpacity
+                      onPress={() => {
+                        const d = new Date(addDueDate);
+                        d.setHours(0, 0, 0, 0);
+                        setAddDueDate(d.getTime());
+                      }}
+                      hitSlop={8}
+                    >
+                      <LniIcon name="lni-xmark" size={15} color={colors.muted} />
+                    </TouchableOpacity>
+                  )}
+                </View>
+              </View>
+            )}
 
             {showDatePicker && (
               <DateTimePicker
@@ -379,7 +411,32 @@ export default function HomeScreen() {
                 display={Platform.OS === 'ios' ? 'spinner' : 'default'}
                 onChange={(_, date) => {
                   setShowDatePicker(Platform.OS === 'ios');
-                  if (date) setAddDueDate(date.getTime());
+                  if (date) {
+                    const newDate = new Date(date);
+                    if (addDueDate && hasTimeSet(addDueDate)) {
+                      const existing = new Date(addDueDate);
+                      newDate.setHours(existing.getHours(), existing.getMinutes(), 0, 0);
+                    } else {
+                      newDate.setHours(0, 0, 0, 0);
+                    }
+                    setAddDueDate(newDate.getTime());
+                  }
+                }}
+              />
+            )}
+
+            {showTimePicker && addDueDate !== null && (
+              <DateTimePicker
+                value={new Date(addDueDate)}
+                mode="time"
+                display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                onChange={(_, time) => {
+                  setShowTimePicker(Platform.OS === 'ios');
+                  if (time) {
+                    const d = new Date(addDueDate);
+                    d.setHours(time.getHours(), time.getMinutes(), 0, 0);
+                    setAddDueDate(d.getTime());
+                  }
                 }}
               />
             )}

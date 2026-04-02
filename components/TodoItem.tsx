@@ -22,8 +22,18 @@ interface Props {
 
 const PRIORITIES: Priority[] = ['low', 'medium', 'high'];
 
-function formatDate(ts: number): string {
-  return new Date(ts).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+function hasTimeSet(ts: number): boolean {
+  const d = new Date(ts);
+  return d.getHours() !== 0 || d.getMinutes() !== 0;
+}
+
+function formatDueDisplay(ts: number): string {
+  const date = new Date(ts).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  if (hasTimeSet(ts)) {
+    const time = new Date(ts).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+    return `${date}, ${time}`;
+  }
+  return date;
 }
 
 export default function TodoItem({ todo }: Props) {
@@ -40,6 +50,7 @@ export default function TodoItem({ todo }: Props) {
   const [editDueDate, setEditDueDate] = useState<number | null>(todo.dueDate);
   const [editListId, setEditListId] = useState(todo.listId);
   const [showDatePicker, setShowDatePicker] = useState(false);
+  const [showTimePicker, setShowTimePicker] = useState(false);
   const [showListPicker, setShowListPicker] = useState(false);
   const [showNewListModal, setShowNewListModal] = useState(false);
   const [newListName, setNewListName] = useState('');
@@ -53,6 +64,8 @@ export default function TodoItem({ todo }: Props) {
     setEditPriority(todo.priority);
     setEditDueDate(todo.dueDate);
     setEditListId(todo.listId);
+    setShowDatePicker(false);
+    setShowTimePicker(false);
     setEditOpen(true);
   }
 
@@ -103,7 +116,7 @@ export default function TodoItem({ todo }: Props) {
               <View style={[styles.metaTag, styles.metaTagRow, isOverdue && styles.metaTagOverdue]}>
                 {isOverdue && <LniIcon name="lni-bolt-2" size={10} color="#F44336" />}
                 <Text style={[styles.metaTagText, isOverdue && styles.metaTagTextOverdue]}>
-                  {formatDate(todo.dueDate)}
+                  {formatDueDisplay(todo.dueDate)}
                 </Text>
               </View>
             ) : null}
@@ -202,16 +215,44 @@ export default function TodoItem({ todo }: Props) {
               <View style={styles.dueDateRow}>
                 <TouchableOpacity style={styles.dueDateButton} onPress={() => setShowDatePicker(true)}>
                   <Text style={styles.dueDateButtonText}>
-                    {editDueDate ? formatDate(editDueDate) : 'Set date'}
+                    {editDueDate ? new Date(editDueDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : 'Set date'}
                   </Text>
                 </TouchableOpacity>
                 {editDueDate !== null && (
-                  <TouchableOpacity onPress={() => setEditDueDate(null)} hitSlop={8}>
+                  <TouchableOpacity onPress={() => { setEditDueDate(null); setShowTimePicker(false); }} hitSlop={8}>
                     <LniIcon name="lni-xmark" size={15} color={colors.muted} />
                   </TouchableOpacity>
                 )}
               </View>
             </View>
+
+            {/* Due time (only when date is set) */}
+            {editDueDate !== null && (
+              <View style={styles.editRow}>
+                <Text style={styles.editRowLabel}>Due Time</Text>
+                <View style={styles.dueDateRow}>
+                  <TouchableOpacity style={styles.dueDateButton} onPress={() => setShowTimePicker(true)}>
+                    <Text style={styles.dueDateButtonText}>
+                      {hasTimeSet(editDueDate)
+                        ? new Date(editDueDate).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
+                        : 'Set time'}
+                    </Text>
+                  </TouchableOpacity>
+                  {hasTimeSet(editDueDate) && (
+                    <TouchableOpacity
+                      onPress={() => {
+                        const d = new Date(editDueDate);
+                        d.setHours(0, 0, 0, 0);
+                        setEditDueDate(d.getTime());
+                      }}
+                      hitSlop={8}
+                    >
+                      <LniIcon name="lni-xmark" size={15} color={colors.muted} />
+                    </TouchableOpacity>
+                  )}
+                </View>
+              </View>
+            )}
 
             {showDatePicker && (
               <DateTimePicker
@@ -220,7 +261,32 @@ export default function TodoItem({ todo }: Props) {
                 display={Platform.OS === 'ios' ? 'spinner' : 'default'}
                 onChange={(_, date) => {
                   setShowDatePicker(Platform.OS === 'ios');
-                  if (date) setEditDueDate(date.getTime());
+                  if (date) {
+                    const newDate = new Date(date);
+                    if (editDueDate && hasTimeSet(editDueDate)) {
+                      const existing = new Date(editDueDate);
+                      newDate.setHours(existing.getHours(), existing.getMinutes(), 0, 0);
+                    } else {
+                      newDate.setHours(0, 0, 0, 0);
+                    }
+                    setEditDueDate(newDate.getTime());
+                  }
+                }}
+              />
+            )}
+
+            {showTimePicker && editDueDate !== null && (
+              <DateTimePicker
+                value={new Date(editDueDate)}
+                mode="time"
+                display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                onChange={(_, time) => {
+                  setShowTimePicker(Platform.OS === 'ios');
+                  if (time) {
+                    const d = new Date(editDueDate);
+                    d.setHours(time.getHours(), time.getMinutes(), 0, 0);
+                    setEditDueDate(d.getTime());
+                  }
                 }}
               />
             )}

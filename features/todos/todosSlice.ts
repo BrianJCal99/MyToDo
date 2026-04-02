@@ -101,9 +101,11 @@ export const syncTodos = createAsyncThunk(
   async (userId: string, { getState }) => {
     const state = getState() as { todos: TodosState };
     const unsynced = state.todos.todos.filter((t) => !t.synced);
-    if (unsynced.length === 0) return [] as string[];
-    await upsertTodosToSupabase(unsynced, userId);
-    return unsynced.map((t) => t.id);
+    if (unsynced.length === 0) return { serverTodos: [] as Todo[] };
+    // Upsert and get back server rows so we can adopt the trigger-assigned updated_at,
+    // preventing clock-skew from causing stale local timestamps to lose conflict resolution.
+    const serverTodos = await upsertTodosToSupabase(unsynced, userId);
+    return { serverTodos };
   }
 );
 
@@ -218,12 +220,17 @@ const todosSlice = createSlice({
         state.loading = false;
         state.error = action.error.message ?? 'Failed to fetch todos';
       })
-      // sync
+      // sync — replace each synced todo with the server's version so that
+      // the trigger-assigned updated_at is stored locally, preventing clock-skew
+      // from causing subsequent merges to incorrectly prefer an older server copy.
       .addCase(syncTodos.fulfilled, (state, action) => {
-        const ids = new Set(action.payload);
-        for (const todo of state.todos) {
-          if (ids.has(todo.id)) todo.synced = true;
-        }
+        const { serverTodos } = action.payload;
+        const serverMap = new Map(serverTodos.map((t) => [t.id, t]));
+        state.todos = state.todos.map((local) => {
+          const server = serverMap.get(local.id);
+          if (!server) return local;
+          return { ...server, synced: true };
+        });
       })
       // add
       .addCase(addTodo.fulfilled, (state, action) => {

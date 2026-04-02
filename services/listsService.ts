@@ -5,14 +5,14 @@ interface SupabaseListRow {
   id: string;
   user_id: string;
   name: string;
-  created_at: number;
+  created_at: string; // timestamptz → ISO 8601 string
 }
 
 function rowToList(row: SupabaseListRow): List {
   return {
     id: row.id,
     name: row.name,
-    createdAt: row.created_at,
+    createdAt: new Date(row.created_at).getTime(),
     synced: true,
   };
 }
@@ -35,7 +35,7 @@ export async function upsertListsToSupabase(lists: List[], userId: string): Prom
     id: l.id,
     user_id: userId,
     name: l.name,
-    created_at: l.createdAt,
+    created_at: new Date(l.createdAt).toISOString(),
   }));
 
   const { error } = await supabase.from('lists').upsert(rows, { onConflict: 'id' });
