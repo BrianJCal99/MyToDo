@@ -3,6 +3,9 @@
 # dependencies
 node_modules/
 
+#mcp
+.mcp.json
+
 # Expo
 .expo/
 dist/
