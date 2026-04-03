@@ -1,5 +1,5 @@
 import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
-import { loadListsFromStorage } from '@/services/storage';
+import { loadListsFromStorage, loadListPendingDeleteIdsFromStorage } from '@/services/storage';
 import {
   fetchListsFromSupabase,
   upsertListsToSupabase,
@@ -21,6 +21,7 @@ export interface ListsState {
   activeListId: string | null; // null = show all lists
   loading: boolean;
   error: string | null;
+  pendingDeleteIds: string[];
 }
 
 const INBOX: List = {
@@ -35,6 +36,7 @@ const initialState: ListsState = {
   activeListId: null,
   loading: false,
   error: null,
+  pendingDeleteIds: [],
 };
 
 function generateId(): string {
@@ -45,9 +47,11 @@ function generateId(): string {
   });
 }
 
-function mergeListArrays(local: List[], remote: List[]): List[] {
+function mergeListArrays(local: List[], remote: List[], pendingDeleteIds: string[]): List[] {
+  const pendingSet = new Set(pendingDeleteIds);
   const map = new Map<string, List>(local.map((l) => [l.id, l]));
   for (const remoteList of remote) {
+    if (pendingSet.has(remoteList.id)) continue; // locally deleted — don't re-add
     map.set(remoteList.id, remoteList);
   }
   // Inbox is always present and local-only
@@ -58,10 +62,16 @@ function mergeListArrays(local: List[], remote: List[]): List[] {
 // ─── Async Thunks ────────────────────────────────────────────────────────────
 
 export const hydrateLists = createAsyncThunk('lists/hydrate', async (userId: string) => {
-  const stored = await loadListsFromStorage(userId);
+  const [stored, pendingDeleteIds] = await Promise.all([
+    loadListsFromStorage(userId),
+    loadListPendingDeleteIdsFromStorage(userId),
+  ]);
   const map = new Map<string, List>(stored.map((l) => [l.id, l]));
   map.set(DEFAULT_LIST_ID, INBOX);
-  return Array.from(map.values()).sort((a, b) => a.createdAt - b.createdAt);
+  return {
+    lists: Array.from(map.values()).sort((a, b) => a.createdAt - b.createdAt),
+    pendingDeleteIds,
+  };
 });
 
 export const fetchLists = createAsyncThunk(
@@ -69,7 +79,7 @@ export const fetchLists = createAsyncThunk(
   async (userId: string, { getState }) => {
     const remote = await fetchListsFromSupabase(userId);
     const state = getState() as { lists: ListsState };
-    return mergeListArrays(state.lists.lists, remote);
+    return mergeListArrays(state.lists.lists, remote, state.lists.pendingDeleteIds);
   }
 );
 
@@ -79,9 +89,25 @@ export const syncLists = createAsyncThunk(
     const state = getState() as { lists: ListsState };
     // Skip Inbox — it's local-only and doesn't belong in Supabase
     const unsynced = state.lists.lists.filter((l) => !l.synced && l.id !== DEFAULT_LIST_ID);
-    if (unsynced.length === 0) return [] as string[];
-    await upsertListsToSupabase(unsynced, userId);
-    return unsynced.map((l) => l.id);
+    const { pendingDeleteIds } = state.lists;
+
+    let syncedIds: string[] = [];
+    if (unsynced.length > 0) {
+      await upsertListsToSupabase(unsynced, userId);
+      syncedIds = unsynced.map((l) => l.id);
+    }
+
+    const successfulDeleteIds: string[] = [];
+    await Promise.all(
+      pendingDeleteIds.map(async (id) => {
+        try {
+          await deleteListFromSupabase(id);
+          successfulDeleteIds.push(id);
+        } catch {}
+      })
+    );
+
+    return { syncedIds, successfulDeleteIds };
   }
 );
 
@@ -101,9 +127,13 @@ export const updateList = createAsyncThunk(
 );
 
 export const deleteList = createAsyncThunk('lists/delete', async (id: string) => {
-  // Fire-and-forget — tolerate offline failures
-  deleteListFromSupabase(id).catch(() => {});
-  return id;
+  if (id === DEFAULT_LIST_ID) return { id, deleteSucceeded: true };
+  let deleteSucceeded = false;
+  try {
+    await deleteListFromSupabase(id);
+    deleteSucceeded = true;
+  } catch {}
+  return { id, deleteSucceeded };
 });
 
 // ─── Slice ───────────────────────────────────────────────────────────────────
@@ -122,7 +152,8 @@ const listsSlice = createSlice({
   extraReducers: (builder) => {
     builder
       .addCase(hydrateLists.fulfilled, (state, action) => {
-        state.lists = action.payload;
+        state.lists = action.payload.lists;
+        state.pendingDeleteIds = action.payload.pendingDeleteIds;
       })
       .addCase(fetchLists.pending, (state) => {
         state.loading = true;
@@ -137,9 +168,14 @@ const listsSlice = createSlice({
         state.error = action.error.message ?? 'Failed to fetch lists';
       })
       .addCase(syncLists.fulfilled, (state, action) => {
-        const ids = new Set(action.payload);
+        const { syncedIds, successfulDeleteIds } = action.payload;
+        const ids = new Set(syncedIds);
         for (const list of state.lists) {
           if (ids.has(list.id)) list.synced = true;
+        }
+        if (successfulDeleteIds.length > 0) {
+          const successSet = new Set(successfulDeleteIds);
+          state.pendingDeleteIds = state.pendingDeleteIds.filter((id) => !successSet.has(id));
         }
       })
       .addCase(addList.fulfilled, (state, action) => {
@@ -155,11 +191,15 @@ const listsSlice = createSlice({
         }
       })
       .addCase(deleteList.fulfilled, (state, action) => {
+        const { id, deleteSucceeded } = action.payload;
         // Cannot delete Inbox
-        if (action.payload !== DEFAULT_LIST_ID) {
-          state.lists = state.lists.filter((l) => l.id !== action.payload);
-          if (state.activeListId === action.payload) {
+        if (id !== DEFAULT_LIST_ID) {
+          state.lists = state.lists.filter((l) => l.id !== id);
+          if (state.activeListId === id) {
             state.activeListId = null;
+          }
+          if (!deleteSucceeded && !state.pendingDeleteIds.includes(id)) {
+            state.pendingDeleteIds.push(id);
           }
         }
       });

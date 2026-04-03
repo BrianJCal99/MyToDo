@@ -24,6 +24,8 @@ import {
   saveListsToStorage,
   savePrefsToStorage,
   saveTodosToStorage,
+  saveTodoPendingDeleteIdsToStorage,
+  saveListPendingDeleteIdsToStorage,
 } from "@/services/storage";
 import { configureStore, createListenerMiddleware } from "@reduxjs/toolkit";
 import { useDispatch, useSelector } from "react-redux";
@@ -56,6 +58,19 @@ listenerMiddleware.startListening({
   },
 });
 
+// ─── Sync on Mutation: Todos ──────────────────────────────────────────────────
+
+listenerMiddleware.startListening({
+  predicate: (action) =>
+    [addTodo.fulfilled.type, updateTodo.fulfilled.type, toggleTodo.fulfilled.type]
+      .includes((action as { type: string }).type),
+  effect: async (_, { getState, dispatch }) => {
+    const state = getState() as RootState;
+    const userId = state.user.id;
+    if (userId) dispatch(syncTodos(userId) as any);
+  },
+});
+
 // ─── Persistence: Lists ───────────────────────────────────────────────────────
 
 const listsPersistTriggers = [
@@ -76,6 +91,43 @@ listenerMiddleware.startListening({
     if (userId) {
       saveListsToStorage(userId, state.lists.lists);
     }
+  },
+});
+
+// ─── Sync on Mutation: Lists ──────────────────────────────────────────────────
+
+listenerMiddleware.startListening({
+  predicate: (action) =>
+    [addList.fulfilled.type, updateList.fulfilled.type]
+      .includes((action as { type: string }).type),
+  effect: async (_, { getState, dispatch }) => {
+    const state = getState() as RootState;
+    const userId = state.user.id;
+    if (userId) dispatch(syncLists(userId) as any);
+  },
+});
+
+// ─── Persistence: Pending Deletes ────────────────────────────────────────────
+
+listenerMiddleware.startListening({
+  predicate: (action) =>
+    [deleteTodo.fulfilled.type, syncTodos.fulfilled.type, hydrateTodos.fulfilled.type]
+      .includes((action as { type: string }).type),
+  effect: async (_, { getState }) => {
+    const state = getState() as RootState;
+    const userId = state.user.id;
+    if (userId) saveTodoPendingDeleteIdsToStorage(userId, state.todos.pendingDeleteIds);
+  },
+});
+
+listenerMiddleware.startListening({
+  predicate: (action) =>
+    [deleteList.fulfilled.type, syncLists.fulfilled.type, hydrateLists.fulfilled.type]
+      .includes((action as { type: string }).type),
+  effect: async (_, { getState }) => {
+    const state = getState() as RootState;
+    const userId = state.user.id;
+    if (userId) saveListPendingDeleteIdsToStorage(userId, state.lists.pendingDeleteIds);
   },
 });
 

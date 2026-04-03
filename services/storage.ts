@@ -31,6 +31,21 @@ export async function clearTodosFromStorage(userId: string): Promise<void> {
   } catch {}
 }
 
+const todoPendingDeleteKey = (userId: string) => `@todo_pending_deletes_${userId}`;
+
+export async function loadTodoPendingDeleteIdsFromStorage(userId: string): Promise<string[]> {
+  try {
+    const raw = await AsyncStorage.getItem(todoPendingDeleteKey(userId));
+    return raw ? (JSON.parse(raw) as string[]) : [];
+  } catch { return []; }
+}
+
+export async function saveTodoPendingDeleteIdsToStorage(userId: string, ids: string[]): Promise<void> {
+  try {
+    await AsyncStorage.setItem(todoPendingDeleteKey(userId), JSON.stringify(ids));
+  } catch {}
+}
+
 // ─── Lists ────────────────────────────────────────────────────────────────────
 
 export async function loadListsFromStorage(userId: string): Promise<List[]> {
@@ -51,6 +66,21 @@ export async function saveListsToStorage(userId: string, lists: List[]): Promise
 export async function clearListsFromStorage(userId: string): Promise<void> {
   try {
     await AsyncStorage.removeItem(listsKey(userId));
+  } catch {}
+}
+
+const listPendingDeleteKey = (userId: string) => `@list_pending_deletes_${userId}`;
+
+export async function loadListPendingDeleteIdsFromStorage(userId: string): Promise<string[]> {
+  try {
+    const raw = await AsyncStorage.getItem(listPendingDeleteKey(userId));
+    return raw ? (JSON.parse(raw) as string[]) : [];
+  } catch { return []; }
+}
+
+export async function saveListPendingDeleteIdsToStorage(userId: string, ids: string[]): Promise<void> {
+  try {
+    await AsyncStorage.setItem(listPendingDeleteKey(userId), JSON.stringify(ids));
   } catch {}
 }
 

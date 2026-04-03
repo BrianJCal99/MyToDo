@@ -1,5 +1,5 @@
 import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
-import { loadTodosFromStorage } from '@/services/storage';
+import { loadTodosFromStorage, loadTodoPendingDeleteIdsFromStorage } from '@/services/storage';
 import {
   fetchTodosFromSupabase,
   upsertTodosToSupabase,
@@ -37,6 +37,7 @@ export interface TodosState {
   searchQuery: string;
   sortBy: SortBy;
   sortOrder: SortOrder;
+  pendingDeleteIds: string[];
 }
 
 const initialState: TodosState = {
@@ -47,6 +48,7 @@ const initialState: TodosState = {
   searchQuery: '',
   sortBy: 'createdAt',
   sortOrder: 'desc',
+  pendingDeleteIds: [],
 };
 
 function generateId(): string {
@@ -76,9 +78,11 @@ function migrateTodo(raw: Record<string, unknown>): Todo {
   };
 }
 
-function mergeTodoLists(local: Todo[], remote: Todo[]): Todo[] {
+function mergeTodoLists(local: Todo[], remote: Todo[], pendingDeleteIds: string[]): Todo[] {
+  const pendingSet = new Set(pendingDeleteIds);
   const map = new Map<string, Todo>(local.map((t) => [t.id, t]));
   for (const remoteTodo of remote) {
+    if (pendingSet.has(remoteTodo.id)) continue; // locally deleted — don't re-add
     const existing = map.get(remoteTodo.id);
     if (!existing || remoteTodo.updatedAt > existing.updatedAt) {
       // Preserve device-local notification IDs when adopting the remote version
@@ -95,8 +99,14 @@ function mergeTodoLists(local: Todo[], remote: Todo[]): Todo[] {
 // ─── Async Thunks ────────────────────────────────────────────────────────────
 
 export const hydrateTodos = createAsyncThunk('todos/hydrate', async (userId: string) => {
-  const raw = await loadTodosFromStorage(userId);
-  return (raw as Record<string, unknown>[]).map(migrateTodo);
+  const [raw, pendingDeleteIds] = await Promise.all([
+    loadTodosFromStorage(userId),
+    loadTodoPendingDeleteIdsFromStorage(userId),
+  ]);
+  return {
+    todos: (raw as Record<string, unknown>[]).map(migrateTodo),
+    pendingDeleteIds,
+  };
 });
 
 export const fetchTodos = createAsyncThunk(
@@ -104,7 +114,7 @@ export const fetchTodos = createAsyncThunk(
   async (userId: string, { getState }) => {
     const remote = await fetchTodosFromSupabase(userId);
     const state = getState() as { todos: TodosState };
-    return mergeTodoLists(state.todos.todos, remote);
+    return mergeTodoLists(state.todos.todos, remote, state.todos.pendingDeleteIds);
   }
 );
 
@@ -113,11 +123,26 @@ export const syncTodos = createAsyncThunk(
   async (userId: string, { getState }) => {
     const state = getState() as { todos: TodosState };
     const unsynced = state.todos.todos.filter((t) => !t.synced);
-    if (unsynced.length === 0) return { serverTodos: [] as Todo[] };
+    const { pendingDeleteIds } = state.todos;
+
     // Upsert and get back server rows so we can adopt the trigger-assigned updated_at,
     // preventing clock-skew from causing stale local timestamps to lose conflict resolution.
-    const serverTodos = await upsertTodosToSupabase(unsynced, userId);
-    return { serverTodos };
+    let serverTodos: Todo[] = [];
+    if (unsynced.length > 0) {
+      serverTodos = await upsertTodosToSupabase(unsynced, userId);
+    }
+
+    const successfulDeleteIds: string[] = [];
+    await Promise.all(
+      pendingDeleteIds.map(async (id) => {
+        try {
+          await deleteTodoFromSupabase(id);
+          successfulDeleteIds.push(id);
+        } catch {}
+      })
+    );
+
+    return { serverTodos, successfulDeleteIds };
   }
 );
 
@@ -231,9 +256,12 @@ export const deleteTodo = createAsyncThunk('todos/delete', async (id: string, { 
   const existing = state.todos.todos.find((t) => t.id === id);
   if (existing?.reminderId) await cancelReminder(existing.reminderId);
   if (existing?.dueNotificationId) await cancelReminder(existing.dueNotificationId);
-  // Fire-and-forget — tolerate offline failures
-  deleteTodoFromSupabase(id).catch(() => {});
-  return id;
+  let deleteSucceeded = false;
+  try {
+    await deleteTodoFromSupabase(id);
+    deleteSucceeded = true;
+  } catch {}
+  return { id, deleteSucceeded };
 });
 
 export const toggleTodo = createAsyncThunk('todos/toggle', async (id: string, { getState }) => {
@@ -287,7 +315,8 @@ const todosSlice = createSlice({
     builder
       // hydrate
       .addCase(hydrateTodos.fulfilled, (state, action) => {
-        state.todos = action.payload;
+        state.todos = action.payload.todos;
+        state.pendingDeleteIds = action.payload.pendingDeleteIds;
       })
       // fetch
       .addCase(fetchTodos.pending, (state) => {
@@ -306,7 +335,7 @@ const todosSlice = createSlice({
       // the trigger-assigned updated_at is stored locally, preventing clock-skew
       // from causing subsequent merges to incorrectly prefer an older server copy.
       .addCase(syncTodos.fulfilled, (state, action) => {
-        const { serverTodos } = action.payload;
+        const { serverTodos, successfulDeleteIds } = action.payload;
         const serverMap = new Map(serverTodos.map((t) => [t.id, t]));
         state.todos = state.todos.map((local) => {
           const server = serverMap.get(local.id);
@@ -314,6 +343,10 @@ const todosSlice = createSlice({
           // Preserve device-local notification IDs — never stored on the server
           return { ...server, synced: true, reminderId: local.reminderId, dueNotificationId: local.dueNotificationId };
         });
+        if (successfulDeleteIds.length > 0) {
+          const successSet = new Set(successfulDeleteIds);
+          state.pendingDeleteIds = state.pendingDeleteIds.filter((id) => !successSet.has(id));
+        }
       })
       // add
       .addCase(addTodo.fulfilled, (state, action) => {
@@ -338,7 +371,11 @@ const todosSlice = createSlice({
       })
       // delete
       .addCase(deleteTodo.fulfilled, (state, action) => {
-        state.todos = state.todos.filter((t) => t.id !== action.payload);
+        const { id, deleteSucceeded } = action.payload;
+        state.todos = state.todos.filter((t) => t.id !== id);
+        if (!deleteSucceeded && !state.pendingDeleteIds.includes(id)) {
+          state.pendingDeleteIds.push(id);
+        }
       })
       // toggle
       .addCase(toggleTodo.fulfilled, (state, action) => {

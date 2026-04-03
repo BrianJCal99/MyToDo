@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   Animated,
+  AppState,
   FlatList,
   Modal,
   Platform,
@@ -13,6 +14,7 @@ import {
   View,
   ActivityIndicator,
 } from 'react-native';
+import NetInfo from '@react-native-community/netinfo';
 import ReadableBackground from '@/components/ReadableBackground';
 import WallpaperCredit from '@/components/WallpaperCredit';
 import { useDailyWallpaper } from '@/hooks/useDailyWallpaper';
@@ -98,6 +100,9 @@ export default function HomeScreen() {
 
   const styles = makeStyles(colors, hasWallpaper, insets);
 
+  const wasConnectedRef = useRef<boolean | null>(null);
+  const backgroundedAtRef = useRef<number | null>(null);
+
   // ── Sidebar ────────────────────────────────────────────────────────────────
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const translateX = useRef(new Animated.Value(SIDEBAR_WIDTH)).current;
@@ -123,11 +128,52 @@ export default function HomeScreen() {
     if (!userId) return;
     dispatch(hydrateLists(userId));
     dispatch(hydrateTodos(userId)).then(() => {
-      dispatch(fetchLists(userId));
-      dispatch(fetchTodos(userId));
-      dispatch(syncLists(userId));
-      dispatch(syncTodos(userId));
+      Promise.all([
+        dispatch(fetchLists(userId)),
+        dispatch(fetchTodos(userId)),
+      ]).then(() => {
+        dispatch(syncLists(userId));
+        dispatch(syncTodos(userId));
+      });
     });
+  }, [userId]);
+
+  useEffect(() => {
+    if (!userId) return;
+    const unsubscribe = NetInfo.addEventListener((state) => {
+      const isConnected = state.isConnected ?? false;
+      if (wasConnectedRef.current === false && isConnected) {
+        dispatch(fetchLists(userId));
+        dispatch(fetchTodos(userId)).then(() => {
+          dispatch(syncLists(userId));
+          dispatch(syncTodos(userId));
+        });
+      }
+      wasConnectedRef.current = isConnected;
+    });
+    return unsubscribe;
+  }, [userId]);
+
+  const FOREGROUND_SYNC_MIN_MS = 5 * 60 * 1000;
+
+  useEffect(() => {
+    if (!userId) return;
+    const subscription = AppState.addEventListener('change', (nextAppState) => {
+      if (nextAppState === 'background' || nextAppState === 'inactive') {
+        backgroundedAtRef.current = Date.now();
+      } else if (nextAppState === 'active') {
+        const backgroundedAt = backgroundedAtRef.current;
+        if (backgroundedAt !== null && Date.now() - backgroundedAt >= FOREGROUND_SYNC_MIN_MS) {
+          dispatch(fetchLists(userId));
+          dispatch(fetchTodos(userId)).then(() => {
+            dispatch(syncLists(userId));
+            dispatch(syncTodos(userId));
+          });
+        }
+        backgroundedAtRef.current = null;
+      }
+    });
+    return () => subscription.remove();
   }, [userId]);
 
   const inboxTodos = useMemo(
