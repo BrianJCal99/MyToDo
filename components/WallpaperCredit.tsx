@@ -1,5 +1,7 @@
 import { Linking, StyleSheet, Text, View } from 'react-native';
 import { WallpaperData } from '@/services/wallpaperService';
+import { useThemeColors } from '@/hooks/use-theme-colors';
+import { ThemeColors } from '@/constants/theme';
 
 interface Props {
   wallpaper: WallpaperData;
@@ -10,6 +12,9 @@ interface Props {
  * Tapping the photographer name or "Unsplash" opens their profile page.
  */
 export default function WallpaperCredit({ wallpaper }: Props) {
+  const colors = useThemeColors();
+  const styles = makeStyles(colors);
+
   function openProfile() {
     Linking.openURL(wallpaper.photographerProfileUrl).catch(() => {
       // Ignore — URL couldn't be opened
@@ -33,28 +38,30 @@ export default function WallpaperCredit({ wallpaper }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    marginTop: 'auto',
-    paddingTop: 16,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: 'rgba(255,255,255,0.15)',
-  },
-  label: {
-    fontSize: 10,
-    fontWeight: '600',
-    textTransform: 'uppercase',
-    letterSpacing: 0.8,
-    color: 'rgba(255,255,255,0.45)',
-    marginBottom: 4,
-  },
-  credit: {
-    fontSize: 12,
-    color: 'rgba(255,255,255,0.65)',
-    lineHeight: 18,
-  },
-  link: {
-    color: '#FFD600',
-    fontWeight: '600',
-  },
-});
+function makeStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    container: {
+      marginTop: 'auto',
+      paddingTop: 16,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: colors.border,
+    },
+    label: {
+      fontSize: 10,
+      fontWeight: '600',
+      textTransform: 'uppercase',
+      letterSpacing: 0.8,
+      color: colors.muted,
+      marginBottom: 4,
+    },
+    credit: {
+      fontSize: 12,
+      color: colors.muted,
+      lineHeight: 18,
+    },
+    link: {
+      color: colors.yellow,
+      fontWeight: '600',
+    },
+  });
+}

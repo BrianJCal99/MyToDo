@@ -7,6 +7,7 @@ import {
   View,
   ViewStyle,
 } from 'react-native';
+import { useThemeColors } from '@/hooks/use-theme-colors';
 
 interface Props {
   /** Remote URI for the background photo. Omit to render a plain background. */
@@ -41,14 +42,17 @@ export default function ReadableBackground({
   style,
   children,
 }: Props) {
+  const colors = useThemeColors();
   const hasImage = Boolean(imageUri);
 
   return (
     <ImageBackground
       source={hasImage ? { uri: imageUri } : undefined}
-      style={[styles.root, style]}
+      // Fallback: theme background color when no photo is available.
+      // This covers API errors, first launch before the fetch completes,
+      // and any offline scenario.
+      style={[styles.root, { backgroundColor: colors.background }, style]}
       resizeMode="cover"
-      // Pre-load the image at full resolution; `cover` handles the crop.
       fadeDuration={400}
     >
       {hasImage && (
@@ -56,7 +60,7 @@ export default function ReadableBackground({
           {/*
            * Layer 1 — Blur
            * Softens fine detail in the photo (grass, leaves, bark) so text
-           * doesn't compete visually.  tint="dark" adds a slight dark cast on
+           * doesn't compete visually. tint="dark" adds a slight dark cast on
            * top of the blur, reducing effective brightness of bright skies.
            */}
           <BlurView
@@ -69,7 +73,6 @@ export default function ReadableBackground({
            * Layer 2 — Gradient vignette
            * Dark at the very top (greeting + nav) and the lower third (list),
            * nearly transparent in the middle so the photo is still visible.
-           * locations: 0 → 0.35 → 0.65 → 1
            */}
           {gradientEnabled && (
             <LinearGradient
@@ -83,22 +86,21 @@ export default function ReadableBackground({
               locations={[0, 0.30, 0.65, 1]}
             />
           )}
+
+          {/*
+           * Layer 3 — Flat dark overlay
+           * Only rendered when a photo is present. Without a photo the theme
+           * background is already the correct color and needs no tinting.
+           */}
+          <View
+            style={[
+              StyleSheet.absoluteFill,
+              { backgroundColor: `rgba(0,0,0,${overlayOpacity})` },
+            ]}
+            pointerEvents="none"
+          />
         </>
       )}
-
-      {/*
-       * Layer 3 — Flat dark overlay (fallback + baseline contrast)
-       * Always present. Even if BlurView / LinearGradient fail (e.g. older
-       * Android WebView builds), this guarantees legible text at any opacity ≥ 0.3.
-       * pointerEvents="none" ensures taps pass through to children.
-       */}
-      <View
-        style={[
-          StyleSheet.absoluteFill,
-          { backgroundColor: `rgba(0,0,0,${overlayOpacity})` },
-        ]}
-        pointerEvents="none"
-      />
 
       {children}
     </ImageBackground>

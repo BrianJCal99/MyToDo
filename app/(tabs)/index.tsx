@@ -57,6 +57,13 @@ function getGreeting() {
   return 'Good Evening';
 }
 
+function getGreetingIcon() {
+  const hour = new Date().getHours();
+  if (hour < 12) return 'lni-sun';        // morning
+  if (hour < 18) return 'lni-cloud-sun';  // afternoon
+  return 'lni-moon';                       // evening / night
+}
+
 export default function HomeScreen() {
   const dispatch = useAppDispatch();
   const router = useRouter();
@@ -265,11 +272,14 @@ export default function HomeScreen() {
       {/* Header */}
       <View style={styles.topBar}>
         <View style={styles.greetingContainer}>
-          <Text style={styles.name}>{getGreeting()}, {firstName} 👋</Text>
+          <View style={styles.greetingRow}>
+            <LniIcon name={getGreetingIcon()} size={30} color={Boolean(wallpaper) ? '#FFFFFF' : colors.text} />
+            <Text style={styles.name}>{getGreeting()}, {firstName}</Text>
+          </View>
         </View>
         <View style={styles.headerActions}>
           <TouchableOpacity onPress={() => router.push('/(tabs)/search')} hitSlop={12}>
-            <LniIcon name="lni-search-1" size={22} color={colors.text} />
+            <LniIcon name="lni-search-1" size={22} color={Boolean(wallpaper) ? '#FFFFFF' : colors.text} />
           </TouchableOpacity>
           <TouchableOpacity onPress={openSidebar} hitSlop={12}>
             <View style={styles.hamburger}>
@@ -669,6 +679,11 @@ function makeStyles(colors: ThemeColors, hasWallpaper: boolean) {
     greetingContainer: {
       flex: 1,
       marginRight: 16,
+    },
+    greetingRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
     },
     name: {
       fontSize: 22,
