@@ -13,6 +13,9 @@ import {
   View,
   ActivityIndicator,
 } from 'react-native';
+import ReadableBackground from '@/components/ReadableBackground';
+import WallpaperCredit from '@/components/WallpaperCredit';
+import { useDailyWallpaper } from '@/hooks/useDailyWallpaper';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useRouter } from 'expo-router';
 import { supabase } from '@/lib/supabase';
@@ -58,13 +61,17 @@ export default function HomeScreen() {
   const dispatch = useAppDispatch();
   const router = useRouter();
   const colors = useThemeColors();
-  const styles = makeStyles(colors);
 
   const firstName = useAppSelector((state) => state.user.firstName);
   const userId = useAppSelector((state) => state.user.id);
   const allTodos = useAppSelector((state) => state.todos.todos);
   const allLists = useAppSelector((state) => state.lists.lists);
   const loading = useAppSelector((state) => state.todos.loading);
+
+  // ── Wallpaper — must be above makeStyles so wallpaper state is available ────
+  const { wallpaper } = useDailyWallpaper();
+
+  const styles = makeStyles(colors, Boolean(wallpaper));
 
   // ── Sidebar ────────────────────────────────────────────────────────────────
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -253,6 +260,7 @@ export default function HomeScreen() {
   }
 
   return (
+    <ReadableBackground imageUri={wallpaper?.imageUrl}>
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.topBar}>
@@ -627,16 +635,28 @@ export default function HomeScreen() {
         <TouchableOpacity style={styles.sidebarItem} onPress={handleLogout}>
           <Text style={styles.sidebarItemText}>Log Out</Text>
         </TouchableOpacity>
+
+        {/* Photographer credit — shown only when wallpaper is loaded */}
+        {wallpaper && <WallpaperCredit wallpaper={wallpaper} />}
       </Animated.View>
     </View>
+    </ReadableBackground>
   );
 }
 
-function makeStyles(colors: ThemeColors) {
+// Text shadow applied to labels that sit directly over the wallpaper
+// (no card background beneath them). Improves legibility on bright images.
+const WALLPAPER_TEXT_SHADOW = {
+  textShadowColor: 'rgba(0,0,0,0.75)',
+  textShadowOffset: { width: 0, height: 1 },
+  textShadowRadius: 6,
+} as const;
+
+function makeStyles(colors: ThemeColors, hasWallpaper: boolean) {
   return StyleSheet.create({
     container: {
       flex: 1,
-      backgroundColor: colors.background,
+      backgroundColor: 'transparent',
       paddingTop: 60,
     },
     topBar: {
@@ -653,8 +673,10 @@ function makeStyles(colors: ThemeColors) {
     name: {
       fontSize: 22,
       fontWeight: '700',
-      color: colors.text,
+      // Always white over the wallpaper; theme text when no image is present
+      color: hasWallpaper ? '#FFFFFF' : colors.text,
       flexShrink: 1,
+      ...(hasWallpaper && WALLPAPER_TEXT_SHADOW),
     },
     headerActions: {
       flexDirection: 'row',
@@ -695,15 +717,17 @@ function makeStyles(colors: ThemeColors) {
     sectionLabel: {
       fontSize: 12,
       fontWeight: '700',
-      color: colors.muted,
+      color: hasWallpaper ? 'rgba(255,255,255,0.75)' : colors.muted,
       textTransform: 'uppercase',
       letterSpacing: 0.8,
+      ...(hasWallpaper && WALLPAPER_TEXT_SHADOW),
     },
     emptyText: {
       fontSize: 14,
-      color: colors.muted,
+      color: hasWallpaper ? 'rgba(255,255,255,0.80)' : colors.muted,
       paddingHorizontal: 24,
       paddingBottom: 4,
+      ...(hasWallpaper && WALLPAPER_TEXT_SHADOW),
     },
     listCard: {
       flexDirection: 'row',
@@ -955,6 +979,7 @@ function makeStyles(colors: ThemeColors) {
       backgroundColor: colors.surface,
       paddingTop: 72,
       paddingHorizontal: 24,
+      paddingBottom: 32,
       borderLeftWidth: 1,
       borderLeftColor: colors.border,
       shadowColor: '#000',

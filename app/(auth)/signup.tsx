@@ -16,10 +16,13 @@ import { Link } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import { ThemeColors } from '@/constants/theme';
 import { useThemeColors } from '@/hooks/use-theme-colors';
+import ReadableBackground from '@/components/ReadableBackground';
+import { useDailyWallpaper } from '@/hooks/useDailyWallpaper';
 
 export default function SignUpScreen() {
   const colors = useThemeColors();
-  const styles = makeStyles(colors);
+  const { wallpaper } = useDailyWallpaper();
+  const styles = makeStyles(colors, Boolean(wallpaper));
 
   const [firstName, setFirstName] = useState('');
   const [email, setEmail] = useState('');
@@ -42,63 +45,65 @@ export default function SignUpScreen() {
   }
 
   return (
-    <KeyboardAvoidingView style={styles.container} behavior="padding">
-      <View style={styles.inner}>
-        <Image source={TODO_ICON} style={styles.icon} />
-        <Text style={styles.appName}>My To-Do List</Text>
-        <Text style={styles.subtitle}>Create your account</Text>
+    <ReadableBackground imageUri={wallpaper?.imageUrl}>
+      <KeyboardAvoidingView style={styles.container} behavior="padding">
+        <View style={styles.inner}>
+          <Image source={TODO_ICON} style={styles.icon} />
+          <Text style={styles.appName}>My To-Do List</Text>
+          <Text style={styles.subtitle}>Create your account</Text>
 
-        <TextInput
-          style={styles.input}
-          placeholder="First Name"
-          placeholderTextColor={colors.placeholder}
-          autoCapitalize="words"
-          value={firstName}
-          onChangeText={setFirstName}
-        />
-        <TextInput
-          style={styles.input}
-          placeholder="Email"
-          placeholderTextColor={colors.placeholder}
-          autoCapitalize="none"
-          keyboardType="email-address"
-          value={email}
-          onChangeText={setEmail}
-        />
-        <TextInput
-          style={styles.input}
-          placeholder="Password"
-          placeholderTextColor={colors.placeholder}
-          secureTextEntry
-          value={password}
-          onChangeText={setPassword}
-        />
+          <TextInput
+            style={styles.input}
+            placeholder="First Name"
+            placeholderTextColor={colors.placeholder}
+            autoCapitalize="words"
+            value={firstName}
+            onChangeText={setFirstName}
+          />
+          <TextInput
+            style={styles.input}
+            placeholder="Email"
+            placeholderTextColor={colors.placeholder}
+            autoCapitalize="none"
+            keyboardType="email-address"
+            value={email}
+            onChangeText={setEmail}
+          />
+          <TextInput
+            style={styles.input}
+            placeholder="Password"
+            placeholderTextColor={colors.placeholder}
+            secureTextEntry
+            value={password}
+            onChangeText={setPassword}
+          />
 
-        <TouchableOpacity style={styles.button} onPress={handleSignUp} disabled={loading}>
-          {loading ? (
-            <ActivityIndicator color={colors.black} />
-          ) : (
-            <Text style={styles.buttonText}>Sign Up</Text>
-          )}
-        </TouchableOpacity>
-
-        <Link href="/(auth)/login" asChild>
-          <TouchableOpacity style={styles.linkContainer}>
-            <Text style={styles.linkText}>
-              Already have an account? <Text style={styles.linkBold}>Log In</Text>
-            </Text>
+          <TouchableOpacity style={styles.button} onPress={handleSignUp} disabled={loading}>
+            {loading ? (
+              <ActivityIndicator color={colors.black} />
+            ) : (
+              <Text style={styles.buttonText}>Sign Up</Text>
+            )}
           </TouchableOpacity>
-        </Link>
-      </View>
-    </KeyboardAvoidingView>
+
+          <Link href="/(auth)/login" asChild>
+            <TouchableOpacity style={styles.linkContainer}>
+              <Text style={styles.linkText}>
+                Already have an account? <Text style={styles.linkBold}>Log In</Text>
+              </Text>
+            </TouchableOpacity>
+          </Link>
+        </View>
+      </KeyboardAvoidingView>
+    </ReadableBackground>
   );
 }
 
-function makeStyles(colors: ThemeColors) {
+function makeStyles(colors: ThemeColors, hasWallpaper: boolean) {
   return StyleSheet.create({
     container: {
       flex: 1,
-      backgroundColor: colors.background,
+      backgroundColor: 'transparent',
     },
     inner: {
       flex: 1,
@@ -118,12 +123,22 @@ function makeStyles(colors: ThemeColors) {
       textAlign: 'center',
       marginBottom: 8,
       letterSpacing: 0.5,
+      ...(hasWallpaper && {
+        textShadowColor: 'rgba(0,0,0,0.8)',
+        textShadowOffset: { width: 0, height: 1 },
+        textShadowRadius: 8,
+      }),
     },
     subtitle: {
       fontSize: 16,
-      color: colors.muted,
+      color: hasWallpaper ? 'rgba(255,255,255,0.85)' : colors.muted,
       textAlign: 'center',
       marginBottom: 40,
+      ...(hasWallpaper && {
+        textShadowColor: 'rgba(0,0,0,0.7)',
+        textShadowOffset: { width: 0, height: 1 },
+        textShadowRadius: 5,
+      }),
     },
     input: {
       borderWidth: 1,
@@ -156,7 +171,12 @@ function makeStyles(colors: ThemeColors) {
     },
     linkText: {
       fontSize: 14,
-      color: colors.muted,
+      color: hasWallpaper ? 'rgba(255,255,255,0.80)' : colors.muted,
+      ...(hasWallpaper && {
+        textShadowColor: 'rgba(0,0,0,0.6)',
+        textShadowOffset: { width: 0, height: 1 },
+        textShadowRadius: 4,
+      }),
     },
     linkBold: {
       color: colors.yellow,

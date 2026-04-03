@@ -91,7 +91,7 @@ export default function TodoItem({ todo }: Props) {
   return (
     <>
       {/* ── Todo card ──────────────────────────────────────────────────────── */}
-      <View style={[styles.container, isOverdue && styles.containerOverdue]}>
+      <View style={styles.container}>
         <TouchableOpacity
           style={[styles.checkbox, todo.completed && styles.checkboxChecked]}
           onPress={() => dispatch(toggleTodo(todo.id))}
@@ -490,10 +490,6 @@ function makeStyles(colors: ThemeColors) {
       marginBottom: 10,
       borderWidth: 1,
       borderColor: colors.border,
-    },
-    containerOverdue: {
-      borderColor: '#F44336',
-      borderWidth: 1.5,
     },
     checkbox: {
       width: 24,
