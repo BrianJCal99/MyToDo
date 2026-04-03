@@ -77,8 +77,15 @@ export default function HomeScreen() {
 
   // ── Wallpaper — must be above makeStyles so wallpaper state is available ────
   const { wallpaper } = useDailyWallpaper();
+  const hasWallpaper = Boolean(wallpaper);
 
-  const styles = makeStyles(colors, Boolean(wallpaper));
+  // Header icons sit directly over the background (no card behind them).
+  // With a wallpaper the overlays darken everything, so white is always safe.
+  // Without a wallpaper use the theme text color so they're visible on both
+  // light (#F7F7F0) and dark (#111111) backgrounds.
+  const headerIconColor = hasWallpaper ? '#FFFFFF' : colors.text;
+
+  const styles = makeStyles(colors, hasWallpaper);
 
   // ── Sidebar ────────────────────────────────────────────────────────────────
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -273,13 +280,13 @@ export default function HomeScreen() {
       <View style={styles.topBar}>
         <View style={styles.greetingContainer}>
           <View style={styles.greetingRow}>
-            <LniIcon name={getGreetingIcon()} size={30} color={Boolean(wallpaper) ? '#FFFFFF' : colors.text} />
+            <LniIcon name={getGreetingIcon()} size={30} color={headerIconColor} />
             <Text style={styles.name}>{getGreeting()}, {firstName}</Text>
           </View>
         </View>
         <View style={styles.headerActions}>
           <TouchableOpacity onPress={() => router.push('/(tabs)/search')} hitSlop={12}>
-            <LniIcon name="lni-search-1" size={22} color={Boolean(wallpaper) ? '#FFFFFF' : colors.text} />
+            <LniIcon name="lni-search-1" size={22} color={headerIconColor} />
           </TouchableOpacity>
           <TouchableOpacity onPress={openSidebar} hitSlop={12}>
             <View style={styles.hamburger}>
