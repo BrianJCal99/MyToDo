@@ -1,7 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   getDailyWallpaper,
+  getRefreshesRemaining,
   loadWallpaperFromStorage,
+  MAX_MANUAL_REFRESHES,
+  refreshWallpaper,
   WallpaperData,
 } from '@/services/wallpaperService';
 
@@ -9,50 +12,84 @@ interface WallpaperState {
   wallpaper: WallpaperData | null;
   loading: boolean;
   error: string | null;
+  // Manual refresh
+  isRefreshing: boolean;
+  refreshesRemaining: number;
+  refresh: () => Promise<void>;
+  // Re-read storage (e.g. when returning from settings)
+  reload: () => void;
 }
 
-/**
- * Loads the daily nature wallpaper on mount.
- * - Immediately surfaces any cached data so the UI isn't blank while fetching.
- * - Replaces with a fresh image if the cache is older than 24 h.
- */
 export function useDailyWallpaper(): WallpaperState {
-  const [state, setState] = useState<WallpaperState>({
-    wallpaper: null,
-    loading: true,
-    error: null,
-  });
+  const [wallpaper, setWallpaper] = useState<WallpaperData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [refreshesRemaining, setRefreshesRemaining] = useState(MAX_MANUAL_REFRESHES);
+  // Incrementing this triggers the load effect to re-run (used by reload())
+  const [version, setVersion] = useState(0);
 
+  // ── Initial / on-focus load ────────────────────────────────────────────────
   useEffect(() => {
     let cancelled = false;
 
     async function load() {
-      // Show cached data immediately to avoid a blank background on launch
+      // Show cached image immediately so there's no blank flash on launch
       const cached = await loadWallpaperFromStorage();
       if (!cancelled && cached) {
-        setState({ wallpaper: cached, loading: true, error: null });
+        setWallpaper(cached);
+        setLoading(true);
       }
 
       try {
-        const data = await getDailyWallpaper();
+        const [data, remaining] = await Promise.all([
+          getDailyWallpaper(),
+          getRefreshesRemaining(),
+        ]);
         if (!cancelled) {
-          setState({ wallpaper: data, loading: false, error: null });
+          setWallpaper(data);
+          setRefreshesRemaining(remaining);
+          setError(null);
         }
       } catch (err) {
         if (!cancelled) {
-          setState((prev) => ({
-            // Keep whatever we already have (cached or null)
-            wallpaper: prev.wallpaper,
-            loading: false,
-            error: err instanceof Error ? err.message : 'Failed to load wallpaper',
-          }));
+          setError(err instanceof Error ? err.message : 'Failed to load wallpaper');
         }
+      } finally {
+        if (!cancelled) setLoading(false);
       }
     }
 
     load();
     return () => { cancelled = true; };
-  }, []);
+  }, [version]);
 
-  return state;
+  // ── Manual refresh ─────────────────────────────────────────────────────────
+  const refresh = useCallback(async () => {
+    if (isRefreshing || refreshesRemaining <= 0) return;
+    setIsRefreshing(true);
+    try {
+      const { wallpaper: fresh, remaining } = await refreshWallpaper();
+      setWallpaper(fresh);
+      setRefreshesRemaining(remaining);
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to refresh wallpaper');
+    } finally {
+      setIsRefreshing(false);
+    }
+  }, [isRefreshing, refreshesRemaining]);
+
+  // ── Reload from storage (called on screen focus) ───────────────────────────
+  const reload = useCallback(() => setVersion((v) => v + 1), []);
+
+  return {
+    wallpaper,
+    loading,
+    error,
+    isRefreshing,
+    refreshesRemaining,
+    refresh,
+    reload,
+  };
 }

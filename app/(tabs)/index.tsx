@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   Animated,
@@ -17,7 +17,7 @@ import ReadableBackground from '@/components/ReadableBackground';
 import WallpaperCredit from '@/components/WallpaperCredit';
 import { useDailyWallpaper } from '@/hooks/useDailyWallpaper';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import { ThemeColors, PRIORITY_COLORS } from '@/constants/theme';
 import { useThemeColors } from '@/hooks/use-theme-colors';
@@ -76,7 +76,11 @@ export default function HomeScreen() {
   const loading = useAppSelector((state) => state.todos.loading);
 
   // ── Wallpaper — must be above makeStyles so wallpaper state is available ────
-  const { wallpaper } = useDailyWallpaper();
+  const { wallpaper, reload: reloadWallpaper } = useDailyWallpaper();
+
+  // Re-read storage when navigating back from Settings so a freshly changed
+  // wallpaper is reflected immediately without a full re-mount.
+  useFocusEffect(useCallback(() => { reloadWallpaper(); }, [reloadWallpaper]));
   const hasWallpaper = Boolean(wallpaper);
 
   // Header icons sit directly over the background (no card behind them).
