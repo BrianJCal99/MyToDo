@@ -1,29 +1,34 @@
-import { configureStore, createListenerMiddleware } from '@reduxjs/toolkit';
-import { useDispatch, useSelector } from 'react-redux';
-import userReducer from './userSlice';
+import listsReducer, {
+  addList,
+  deleteList,
+  fetchLists,
+  hydrateLists,
+  setActiveListId,
+  syncLists,
+  updateList,
+} from "@/features/lists/listsSlice";
 import todosReducer, {
   addTodo,
-  updateTodo,
   deleteTodo,
-  toggleTodo,
   fetchTodos,
   hydrateTodos,
-  syncTodos,
   setFilter,
   setSearchQuery,
   setSortBy,
   setSortOrder,
-} from '@/features/todos/todosSlice';
-import listsReducer, {
-  addList,
-  updateList,
-  deleteList,
-  fetchLists,
-  hydrateLists,
-  syncLists,
-  setActiveListId,
-} from '@/features/lists/listsSlice';
-import { saveTodosToStorage, saveListsToStorage, savePrefsToStorage } from '@/services/storage';
+  syncTodos,
+  toggleTodo,
+  updateTodo,
+} from "@/features/todos/todosSlice";
+import {
+  saveListsToStorage,
+  savePrefsToStorage,
+  saveTodosToStorage,
+} from "@/services/storage";
+import { configureStore, createListenerMiddleware } from "@reduxjs/toolkit";
+import { useDispatch, useSelector } from "react-redux";
+import devToolsEnhancer from "redux-devtools-expo-dev-plugin";
+import userReducer from "./userSlice";
 
 const listenerMiddleware = createListenerMiddleware();
 
@@ -40,7 +45,8 @@ const todosPersistTriggers = [
 ];
 
 listenerMiddleware.startListening({
-  predicate: (action) => todosPersistTriggers.includes((action as { type: string }).type),
+  predicate: (action) =>
+    todosPersistTriggers.includes((action as { type: string }).type),
   effect: async (_, { getState }) => {
     const state = getState() as RootState;
     const userId = state.user.id;
@@ -62,7 +68,8 @@ const listsPersistTriggers = [
 ];
 
 listenerMiddleware.startListening({
-  predicate: (action) => listsPersistTriggers.includes((action as { type: string }).type),
+  predicate: (action) =>
+    listsPersistTriggers.includes((action as { type: string }).type),
   effect: async (_, { getState }) => {
     const state = getState() as RootState;
     const userId = state.user.id;
@@ -74,7 +81,7 @@ listenerMiddleware.startListening({
 
 // ─── Persistence: UI Preferences ─────────────────────────────────────────────
 
-const prefsTriggers = [
+const prefsTriggers: string[] = [
   setFilter.type,
   setSearchQuery.type,
   setSortBy.type,
@@ -83,7 +90,8 @@ const prefsTriggers = [
 ];
 
 listenerMiddleware.startListening({
-  predicate: (action) => prefsTriggers.includes((action as { type: string }).type),
+  predicate: (action) =>
+    prefsTriggers.includes((action as { type: string }).type),
   effect: async (_, { getState }) => {
     const state = getState() as RootState;
     const userId = state.user.id;
@@ -109,6 +117,9 @@ export const store = configureStore({
   },
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware().prepend(listenerMiddleware.middleware),
+  devTools: false, // Disable default to use the Expo plugin
+  enhancers: (getDefaultEnhancers) =>
+    getDefaultEnhancers().concat(devToolsEnhancer()),
 });
 
 export type RootState = ReturnType<typeof store.getState>;

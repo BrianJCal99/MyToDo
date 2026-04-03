@@ -91,6 +91,11 @@ export default function HomeScreen() {
   // light (#F7F7F0) and dark (#111111) backgrounds.
   const headerIconColor = hasWallpaper ? '#FFFFFF' : colors.text;
 
+  // Section/list icons follow device theme (black in light, white in dark) over
+  // a wallpaper, otherwise fall back to the app default palette colors.
+  const sectionIconColor = hasWallpaper ? '#FFFFFF' : colors.muted;
+  const sectionAccentColor = hasWallpaper ? '#FFFFFF' : colors.yellow;
+
   const styles = makeStyles(colors, hasWallpaper, insets);
 
   // ── Sidebar ────────────────────────────────────────────────────────────────
@@ -227,17 +232,17 @@ export default function HomeScreen() {
       return (
         <View style={styles.sectionHeader}>
           <View style={styles.sectionLabelRow}>
-            <LniIcon name={icon} size={14} color={colors.muted} />
+            <LniIcon name={icon} size={14} color={sectionIconColor} />
             <Text style={styles.sectionLabel}>{item.label}</Text>
           </View>
           {item.label === 'Inbox' && (
             <TouchableOpacity onPress={openAddSheet} hitSlop={10}>
-              <LniIcon name="lni-plus" size={18} color={colors.yellow} />
+              <LniIcon name="lni-plus" size={18} color={sectionAccentColor} />
             </TouchableOpacity>
           )}
           {item.label === 'Lists' && (
             <TouchableOpacity onPress={() => setCreateListModalVisible(true)} hitSlop={10}>
-              <LniIcon name="lni-plus" size={18} color={colors.yellow} />
+              <LniIcon name="lni-plus" size={18} color={sectionAccentColor} />
             </TouchableOpacity>
           )}
         </View>
@@ -266,13 +271,13 @@ export default function HomeScreen() {
           activeOpacity={0.7}
         >
           <View style={styles.listIconWrap}>
-            <LniIcon name="lni-folder-1" size={18} color={colors.yellow} />
+            <LniIcon name="lni-folder-1" size={18} color={sectionAccentColor} />
           </View>
           <View style={styles.listCardText}>
             <Text style={styles.listCardName}>{list.name}</Text>
             <Text style={styles.listCardCount}>{count} {count === 1 ? 'todo' : 'todos'}</Text>
           </View>
-          <LniIcon name="lni-chevron-right-circle" size={16} color={colors.muted} />
+          <LniIcon name="lni-chevron-right-circle" size={16} color={sectionIconColor} />
         </TouchableOpacity>
       );
     }
@@ -781,12 +786,14 @@ function makeStyles(colors: ThemeColors, hasWallpaper: boolean, insets: { top: n
     listCardName: {
       fontSize: 15,
       fontWeight: '600',
-      color: colors.text,
+      color: hasWallpaper ? '#FFFFFF' : colors.text,
+      ...(hasWallpaper && WALLPAPER_TEXT_SHADOW),
     },
     listCardCount: {
       fontSize: 12,
-      color: colors.muted,
+      color: hasWallpaper ? 'rgba(255,255,255,0.75)' : colors.muted,
       marginTop: 1,
+      ...(hasWallpaper && WALLPAPER_TEXT_SHADOW),
     },
     input: {
       borderWidth: 1,
