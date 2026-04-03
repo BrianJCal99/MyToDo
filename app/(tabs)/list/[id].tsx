@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Alert, FlatList, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ThemeColors } from '@/constants/theme';
 import { useThemeColors } from '@/hooks/use-theme-colors';
 import { useAppDispatch, useAppSelector } from '@/store';
@@ -14,7 +15,8 @@ export default function ListDetailScreen() {
   const router = useRouter();
   const dispatch = useAppDispatch();
   const colors = useThemeColors();
-  const styles = makeStyles(colors);
+  const insets = useSafeAreaInsets();
+  const styles = makeStyles(colors, insets);
 
   const allTodos = useAppSelector((state) => state.todos.todos);
   const allLists = useAppSelector((state) => state.lists.lists);
@@ -113,12 +115,12 @@ export default function ListDetailScreen() {
   );
 }
 
-function makeStyles(colors: ThemeColors) {
+function makeStyles(colors: ThemeColors, insets: { top: number; bottom: number }) {
   return StyleSheet.create({
     container: {
       flex: 1,
       backgroundColor: colors.background,
-      paddingTop: 60,
+      paddingTop: insets.top + 16,
     },
     header: {
       flexDirection: 'row',
@@ -176,7 +178,7 @@ function makeStyles(colors: ThemeColors) {
       color: colors.disabledText,
     },
     list: {
-      paddingBottom: 32,
+      paddingBottom: 32 + insets.bottom,
     },
     emptyContainer: {
       flex: 1,

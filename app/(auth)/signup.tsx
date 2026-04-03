@@ -18,11 +18,13 @@ import { ThemeColors } from '@/constants/theme';
 import { useThemeColors } from '@/hooks/use-theme-colors';
 import ReadableBackground from '@/components/ReadableBackground';
 import { useDailyWallpaper } from '@/hooks/useDailyWallpaper';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function SignUpScreen() {
   const colors = useThemeColors();
+  const insets = useSafeAreaInsets();
   const { wallpaper } = useDailyWallpaper();
-  const styles = makeStyles(colors, Boolean(wallpaper));
+  const styles = makeStyles(colors, Boolean(wallpaper), insets);
 
   const [firstName, setFirstName] = useState('');
   const [email, setEmail] = useState('');
@@ -99,7 +101,7 @@ export default function SignUpScreen() {
   );
 }
 
-function makeStyles(colors: ThemeColors, hasWallpaper: boolean) {
+function makeStyles(colors: ThemeColors, hasWallpaper: boolean, insets: { bottom: number }) {
   return StyleSheet.create({
     container: {
       flex: 1,
@@ -110,6 +112,7 @@ function makeStyles(colors: ThemeColors, hasWallpaper: boolean) {
       justifyContent: 'center',
       alignItems: 'center',
       paddingHorizontal: 32,
+      paddingBottom: insets.bottom + 16,
     },
     icon: {
       width: 144,

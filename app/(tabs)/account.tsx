@@ -10,6 +10,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '@/lib/supabase';
 import { ThemeColors } from '@/constants/theme';
 import { useThemeColors } from '@/hooks/use-theme-colors';
@@ -23,7 +24,8 @@ export default function AccountScreen() {
   const router = useRouter();
   const dispatch = useAppDispatch();
   const colors = useThemeColors();
-  const styles = makeStyles(colors);
+  const insets = useSafeAreaInsets();
+  const styles = makeStyles(colors, insets);
 
   const userId = useAppSelector((s) => s.user.id) ?? '';
   const firstName = useAppSelector((s) => s.user.firstName) ?? '';
@@ -207,15 +209,15 @@ export default function AccountScreen() {
   );
 }
 
-function makeStyles(colors: ThemeColors) {
+function makeStyles(colors: ThemeColors, insets: { top: number; bottom: number }) {
   return StyleSheet.create({
     container: {
       flex: 1,
       backgroundColor: colors.background,
     },
     scroll: {
-      paddingTop: 60,
-      paddingBottom: 48,
+      paddingTop: insets.top + 16,
+      paddingBottom: 48 + insets.bottom,
     },
 
     // ── Header ──

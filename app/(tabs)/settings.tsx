@@ -11,6 +11,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Notifications from 'expo-notifications';
 import { ThemeColors } from '@/constants/theme';
 import { useThemeColors } from '@/hooks/use-theme-colors';
@@ -27,7 +28,8 @@ async function fetchPermissionStatus(): Promise<PermissionStatus> {
 export default function SettingsScreen() {
   const router = useRouter();
   const colors = useThemeColors();
-  const styles = makeStyles(colors);
+  const insets = useSafeAreaInsets();
+  const styles = makeStyles(colors, insets);
 
   const [permissionStatus, setPermissionStatus] = useState<PermissionStatus>('undetermined');
 
@@ -181,15 +183,15 @@ export default function SettingsScreen() {
   );
 }
 
-function makeStyles(colors: ThemeColors) {
+function makeStyles(colors: ThemeColors, insets: { top: number; bottom: number }) {
   return StyleSheet.create({
     container: {
       flex: 1,
       backgroundColor: colors.background,
     },
     scroll: {
-      paddingTop: 60,
-      paddingBottom: 48,
+      paddingTop: insets.top + 16,
+      paddingBottom: 48 + insets.bottom,
     },
 
     // ── Header ──

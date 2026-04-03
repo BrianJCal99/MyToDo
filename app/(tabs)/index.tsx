@@ -18,6 +18,7 @@ import WallpaperCredit from '@/components/WallpaperCredit';
 import { useDailyWallpaper } from '@/hooks/useDailyWallpaper';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useFocusEffect, useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '@/lib/supabase';
 import { ThemeColors, PRIORITY_COLORS } from '@/constants/theme';
 import { useThemeColors } from '@/hooks/use-theme-colors';
@@ -76,6 +77,7 @@ export default function HomeScreen() {
   const loading = useAppSelector((state) => state.todos.loading);
 
   // ── Wallpaper — must be above makeStyles so wallpaper state is available ────
+  const insets = useSafeAreaInsets();
   const { wallpaper, reload: reloadWallpaper } = useDailyWallpaper();
 
   // Re-read storage when navigating back from Settings so a freshly changed
@@ -89,7 +91,7 @@ export default function HomeScreen() {
   // light (#F7F7F0) and dark (#111111) backgrounds.
   const headerIconColor = hasWallpaper ? '#FFFFFF' : colors.text;
 
-  const styles = makeStyles(colors, hasWallpaper);
+  const styles = makeStyles(colors, hasWallpaper, insets);
 
   // ── Sidebar ────────────────────────────────────────────────────────────────
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -673,12 +675,12 @@ const WALLPAPER_TEXT_SHADOW = {
   textShadowRadius: 6,
 } as const;
 
-function makeStyles(colors: ThemeColors, hasWallpaper: boolean) {
+function makeStyles(colors: ThemeColors, hasWallpaper: boolean, insets: { top: number; bottom: number }) {
   return StyleSheet.create({
     container: {
       flex: 1,
       backgroundColor: 'transparent',
-      paddingTop: 60,
+      paddingTop: insets.top + 16,
     },
     topBar: {
       flexDirection: 'row',
@@ -720,7 +722,7 @@ function makeStyles(colors: ThemeColors, hasWallpaper: boolean) {
       borderRadius: 2,
     },
     list: {
-      paddingBottom: 32,
+      paddingBottom: 32 + insets.bottom,
     },
     centered: {
       flex: 1,
@@ -1003,9 +1005,9 @@ function makeStyles(colors: ThemeColors, hasWallpaper: boolean) {
       bottom: 0,
       width: SIDEBAR_WIDTH,
       backgroundColor: colors.surface,
-      paddingTop: 72,
+      paddingTop: insets.top + 16,
       paddingHorizontal: 24,
-      paddingBottom: 32,
+      paddingBottom: 32 + insets.bottom,
       borderLeftWidth: 1,
       borderLeftColor: colors.border,
       shadowColor: '#000',

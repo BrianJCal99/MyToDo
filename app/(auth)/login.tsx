@@ -18,11 +18,13 @@ import { ThemeColors } from '@/constants/theme';
 import { useThemeColors } from '@/hooks/use-theme-colors';
 import ReadableBackground from '@/components/ReadableBackground';
 import { useDailyWallpaper } from '@/hooks/useDailyWallpaper';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function LoginScreen() {
   const colors = useThemeColors();
+  const insets = useSafeAreaInsets();
   const { wallpaper } = useDailyWallpaper();
-  const styles = makeStyles(colors, Boolean(wallpaper));
+  const styles = makeStyles(colors, Boolean(wallpaper), insets);
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -86,7 +88,7 @@ export default function LoginScreen() {
   );
 }
 
-function makeStyles(colors: ThemeColors, hasWallpaper: boolean) {
+function makeStyles(colors: ThemeColors, hasWallpaper: boolean, insets: { bottom: number }) {
   return StyleSheet.create({
     container: {
       flex: 1,
@@ -98,6 +100,7 @@ function makeStyles(colors: ThemeColors, hasWallpaper: boolean) {
       justifyContent: 'center',
       alignItems: 'center',
       paddingHorizontal: 32,
+      paddingBottom: insets.bottom + 16,
     },
     icon: {
       width: 144,

@@ -8,6 +8,7 @@ import {
   View,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ThemeColors } from '@/constants/theme';
 import { useThemeColors } from '@/hooks/use-theme-colors';
 import { useAppSelector } from '@/store';
@@ -23,7 +24,8 @@ type Section =
 export default function SearchScreen() {
   const router = useRouter();
   const colors = useThemeColors();
-  const styles = makeStyles(colors);
+  const insets = useSafeAreaInsets();
+  const styles = makeStyles(colors, insets);
 
   const inputRef = useRef<TextInput>(null);
   const [query, setQuery] = useState('');
@@ -195,12 +197,12 @@ export default function SearchScreen() {
   );
 }
 
-function makeStyles(colors: ThemeColors) {
+function makeStyles(colors: ThemeColors, insets: { top: number; bottom: number }) {
   return StyleSheet.create({
     container: {
       flex: 1,
       backgroundColor: colors.background,
-      paddingTop: 60,
+      paddingTop: insets.top + 16,
     },
     header: {
       flexDirection: 'row',
@@ -228,7 +230,7 @@ function makeStyles(colors: ThemeColors) {
       padding: 0,
     },
     list: {
-      paddingBottom: 32,
+      paddingBottom: 32 + insets.bottom,
     },
     sectionHeader: {
       flexDirection: 'row',

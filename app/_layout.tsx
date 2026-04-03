@@ -6,6 +6,7 @@ import { useFonts } from 'expo-font';
 import 'react-native-reanimated';
 import { Provider } from 'react-redux';
 
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { SplashScreen } from '@/components/SplashScreen';
 import { store } from '@/store';
@@ -106,8 +107,10 @@ function RootLayoutNav() {
 
 export default function RootLayout() {
   return (
-    <Provider store={store}>
-      <RootLayoutNav />
-    </Provider>
+    <SafeAreaProvider>
+      <Provider store={store}>
+        <RootLayoutNav />
+      </Provider>
+    </SafeAreaProvider>
   );
 }
