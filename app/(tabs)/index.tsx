@@ -60,9 +60,9 @@ function getGreeting() {
 
 function getGreetingIcon() {
   const hour = new Date().getHours();
-  if (hour < 12) return 'lni-sun';        // morning
+  if (hour < 12) return 'lni-sun-1';      // morning
   if (hour < 18) return 'lni-cloud-sun';  // afternoon
-  return 'lni-moon';                       // evening / night
+  return 'lni-moon-half-right-5';           // evening / night
 }
 
 export default function HomeScreen() {
