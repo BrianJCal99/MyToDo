@@ -271,13 +271,13 @@ export default function HomeScreen() {
           activeOpacity={0.7}
         >
           <View style={styles.listIconWrap}>
-            <LniIcon name="lni-folder-1" size={18} color={sectionAccentColor} />
+            <LniIcon name="lni-folder-1" size={18} color={colors.yellow} />
           </View>
           <View style={styles.listCardText}>
             <Text style={styles.listCardName}>{list.name}</Text>
             <Text style={styles.listCardCount}>{count} {count === 1 ? 'todo' : 'todos'}</Text>
           </View>
-          <LniIcon name="lni-chevron-right-circle" size={16} color={sectionIconColor} />
+          <LniIcon name="lni-chevron-right-circle" size={16} color={colors.muted} />
         </TouchableOpacity>
       );
     }
@@ -786,14 +786,12 @@ function makeStyles(colors: ThemeColors, hasWallpaper: boolean, insets: { top: n
     listCardName: {
       fontSize: 15,
       fontWeight: '600',
-      color: hasWallpaper ? '#FFFFFF' : colors.text,
-      ...(hasWallpaper && WALLPAPER_TEXT_SHADOW),
+      color: colors.text,
     },
     listCardCount: {
       fontSize: 12,
-      color: hasWallpaper ? 'rgba(255,255,255,0.75)' : colors.muted,
+      color: colors.muted,
       marginTop: 1,
-      ...(hasWallpaper && WALLPAPER_TEXT_SHADOW),
     },
     input: {
       borderWidth: 1,
