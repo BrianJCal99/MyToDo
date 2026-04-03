@@ -9,6 +9,7 @@ const SORT_OPTIONS: { label: string; value: SortBy }[] = [
   { label: 'Date Added', value: 'createdAt' },
   { label: 'Updated', value: 'updatedAt' },
   { label: 'Priority', value: 'priority' },
+  { label: 'Title', value: 'title' },
   { label: 'Due Date', value: 'dueDate' },
 ];
 

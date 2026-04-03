@@ -7,7 +7,9 @@ import { useThemeColors } from '@/hooks/use-theme-colors';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { addTodo, deleteTodo } from '@/features/todos/todosSlice';
 import { deleteList } from '@/features/lists/listsSlice';
+import { makeSelectListFilteredSortedTodos } from '@/features/todos/todosSelectors';
 import TodoItem from '@/components/TodoItem';
+import FilterSortModal from '@/components/FilterSortModal';
 import LniIcon from '@/components/LniIcon';
 
 export default function ListDetailScreen() {
@@ -18,15 +20,35 @@ export default function ListDetailScreen() {
   const insets = useSafeAreaInsets();
   const styles = makeStyles(colors, insets);
 
-  const allTodos = useAppSelector((state) => state.todos.todos);
   const allLists = useAppSelector((state) => state.lists.lists);
+  const allTodos = useAppSelector((state) => state.todos.todos);
 
   const list = allLists.find((l) => l.id === id);
-  const todos = useMemo(
-    () => allTodos.filter((t) => t.listId === id),
+
+  // Unfiltered counts for the subtitle
+  const totalCount = useMemo(
+    () => allTodos.filter((t) => t.listId === id).length,
     [allTodos, id]
   );
 
+  const completedCount = useMemo(
+    () => allTodos.filter((t) => t.listId === id && t.completed).length,
+    [allTodos, id]
+  );
+
+  // Filtered + sorted todos for the list
+  const selectTodos = useMemo(() => makeSelectListFilteredSortedTodos(id), [id]);
+  const todos = useAppSelector(selectTodos);
+
+  const hasActiveFilters = useAppSelector(
+    (state) =>
+      state.todos.filter !== 'all' ||
+      state.todos.priorityFilter !== 'all' ||
+      state.todos.sortBy !== 'createdAt' ||
+      state.todos.sortOrder !== 'desc'
+  );
+
+  const [filterSortOpen, setFilterSortOpen] = useState(false);
   const [title, setTitle] = useState('');
   const canAdd = title.trim().length > 0;
 
@@ -37,10 +59,11 @@ export default function ListDetailScreen() {
   }
 
   function handleDeleteList() {
+    const allInList = allTodos.filter((t) => t.listId === id);
     Alert.alert(
       `Delete "${list?.name}"?`,
-      todos.length > 0
-        ? `This will permanently delete the list and all ${todos.length} todo${todos.length === 1 ? '' : 's'} in it.`
+      allInList.length > 0
+        ? `This will permanently delete the list and all ${allInList.length} todo${allInList.length === 1 ? '' : 's'} in it.`
         : 'This will permanently delete the list.',
       [
         { text: 'Cancel', style: 'cancel' },
@@ -48,7 +71,7 @@ export default function ListDetailScreen() {
           text: 'Delete',
           style: 'destructive',
           onPress: () => {
-            todos.forEach((t) => dispatch(deleteTodo(t.id)));
+            allInList.forEach((t) => dispatch(deleteTodo(t.id)));
             dispatch(deleteList(id));
             router.back();
           },
@@ -69,9 +92,15 @@ export default function ListDetailScreen() {
             {list?.name ?? 'List'}
           </Text>
           <Text style={styles.subtitle}>
-            {todos.length} {todos.length === 1 ? 'todo' : 'todos'}
+            {completedCount}/{totalCount} done
           </Text>
         </View>
+        <TouchableOpacity onPress={() => setFilterSortOpen(true)} hitSlop={12}>
+          <View>
+            <LniIcon name="lni-funnel-1" size={20} color={colors.muted} />
+            {hasActiveFilters && <View style={styles.filterBadge} />}
+          </View>
+        </TouchableOpacity>
         <TouchableOpacity onPress={handleDeleteList} hitSlop={12}>
           <LniIcon name="lni-trash-3" size={20} color={colors.muted} />
         </TouchableOpacity>
@@ -107,10 +136,14 @@ export default function ListDetailScreen() {
         ListEmptyComponent={
           <View style={styles.emptyState}>
             <LniIcon name="lni-folder-1" size={40} color={colors.border} />
-            <Text style={styles.emptyText}>No todos in this list</Text>
+            <Text style={styles.emptyText}>
+              {hasActiveFilters ? 'No todos match the current filters' : 'No todos in this list'}
+            </Text>
           </View>
         }
       />
+
+      <FilterSortModal visible={filterSortOpen} onClose={() => setFilterSortOpen(false)} />
     </View>
   );
 }
@@ -141,6 +174,15 @@ function makeStyles(colors: ThemeColors, insets: { top: number; bottom: number }
       fontSize: 13,
       color: colors.muted,
       marginTop: 1,
+    },
+    filterBadge: {
+      position: 'absolute',
+      top: 0,
+      right: 0,
+      width: 7,
+      height: 7,
+      borderRadius: 4,
+      backgroundColor: colors.yellow,
     },
     inputRow: {
       flexDirection: 'row',

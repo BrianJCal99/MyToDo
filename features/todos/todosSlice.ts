@@ -9,9 +9,10 @@ import { scheduleReminder, scheduleDueNotification, cancelReminder } from '@/ser
 import { DEFAULT_LIST_ID } from '@/features/lists/listsSlice';
 
 export type Priority = 'low' | 'medium' | 'high';
-export type Filter = 'all' | 'active' | 'completed' | 'overdue' | 'high_priority';
-export type SortBy = 'createdAt' | 'updatedAt' | 'priority' | 'dueDate';
+export type Filter = 'all' | 'active' | 'completed' | 'overdue' | 'high_priority' | 'due_today';
+export type SortBy = 'createdAt' | 'updatedAt' | 'priority' | 'dueDate' | 'title';
 export type SortOrder = 'asc' | 'desc';
+export type PriorityFilter = Priority | 'all';
 
 export interface Todo {
   id: string;
@@ -34,6 +35,7 @@ export interface TodosState {
   loading: boolean;
   error: string | null;
   filter: Filter;
+  priorityFilter: PriorityFilter;
   searchQuery: string;
   sortBy: SortBy;
   sortOrder: SortOrder;
@@ -45,6 +47,7 @@ const initialState: TodosState = {
   loading: false,
   error: null,
   filter: 'all',
+  priorityFilter: 'all',
   searchQuery: '',
   sortBy: 'createdAt',
   sortOrder: 'desc',
@@ -298,6 +301,9 @@ const todosSlice = createSlice({
     setFilter(state, action: PayloadAction<Filter>) {
       state.filter = action.payload;
     },
+    setPriorityFilter(state, action: PayloadAction<PriorityFilter>) {
+      state.priorityFilter = action.payload;
+    },
     setSearchQuery(state, action: PayloadAction<string>) {
       state.searchQuery = action.payload;
     },
@@ -392,5 +398,5 @@ const todosSlice = createSlice({
   },
 });
 
-export const { setFilter, setSearchQuery, setSortBy, setSortOrder, clearTodos } = todosSlice.actions;
+export const { setFilter, setPriorityFilter, setSearchQuery, setSortBy, setSortOrder, clearTodos } = todosSlice.actions;
 export default todosSlice.reducer;

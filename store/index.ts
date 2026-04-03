@@ -13,6 +13,7 @@ import todosReducer, {
   fetchTodos,
   hydrateTodos,
   setFilter,
+  setPriorityFilter,
   setSearchQuery,
   setSortBy,
   setSortOrder,
@@ -135,6 +136,7 @@ listenerMiddleware.startListening({
 
 const prefsTriggers: string[] = [
   setFilter.type,
+  setPriorityFilter.type,
   setSearchQuery.type,
   setSortBy.type,
   setSortOrder.type,
@@ -150,6 +152,7 @@ listenerMiddleware.startListening({
     if (userId) {
       savePrefsToStorage(userId, {
         filter: state.todos.filter,
+        priorityFilter: state.todos.priorityFilter,
         sortBy: state.todos.sortBy,
         sortOrder: state.todos.sortOrder,
         searchQuery: state.todos.searchQuery,

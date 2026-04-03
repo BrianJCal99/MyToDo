@@ -1,6 +1,7 @@
 import { createSelector } from '@reduxjs/toolkit';
 import { RootState } from '@/store';
 import { Priority } from '@/features/todos/todosSlice';
+import { DEFAULT_LIST_ID } from '@/features/lists/listsSlice';
 
 const PRIORITY_WEIGHT: Record<Priority, number> = { high: 3, medium: 2, low: 1 };
 
@@ -9,6 +10,7 @@ const PRIORITY_WEIGHT: Record<Priority, number> = { high: 3, medium: 2, low: 1 }
 
 export const selectAllTodos       = (state: RootState) => state.todos.todos;
 export const selectFilter         = (state: RootState) => state.todos.filter;
+export const selectPriorityFilter = (state: RootState) => state.todos.priorityFilter;
 export const selectSearchQuery    = (state: RootState) => state.todos.searchQuery;
 export const selectSortBy         = (state: RootState) => state.todos.sortBy;
 export const selectSortOrder      = (state: RootState) => state.todos.sortOrder;
@@ -40,22 +42,34 @@ export const selectFilteredTodos = createSelector(
       case 'completed':
         return todos.filter((t) => t.completed);
       case 'overdue':
-        // dueDate in the past and not yet done
         return todos.filter((t) => !t.completed && t.dueDate !== null && t.dueDate < now);
       case 'high_priority':
         return todos.filter((t) => t.priority === 'high' && !t.completed);
+      case 'due_today': {
+        const start = startOfToday();
+        const end = endOfToday();
+        return todos.filter((t) => !t.completed && t.dueDate !== null && t.dueDate >= start && t.dueDate <= end);
+      }
       default:
-        // 'all' — no status filter
         return todos;
     }
   }
 );
 
-// ─── 3. Search ────────────────────────────────────────────────────────────────
-// Case-insensitive match against title + description, applied after status filter.
+// ─── 3. Priority Filter ───────────────────────────────────────────────────────
+// Narrow results to a specific priority level, applied after status filter.
+
+export const selectPriorityFilteredTodos = createSelector(
+  [selectFilteredTodos, selectPriorityFilter],
+  (todos, priorityFilter) =>
+    priorityFilter === 'all' ? todos : todos.filter((t) => t.priority === priorityFilter)
+);
+
+// ─── 4. Search ────────────────────────────────────────────────────────────────
+// Case-insensitive match against title + description, applied after priority filter.
 
 export const selectSearchedTodos = createSelector(
-  [selectFilteredTodos, selectSearchQuery],
+  [selectPriorityFilteredTodos, selectSearchQuery],
   (todos, query) => {
     const q = query.trim().toLowerCase();
     if (!q) return todos;
@@ -67,38 +81,44 @@ export const selectSearchedTodos = createSelector(
   }
 );
 
-// ─── 4. Sort ──────────────────────────────────────────────────────────────────
+// ─── 5. Sort ──────────────────────────────────────────────────────────────────
 // Applied last — spread first to avoid mutating the upstream memoized array.
 // dueDate nulls always sort to the end regardless of sort order.
+
+function applySortOrder(cmp: number, sortOrder: 'asc' | 'desc'): number {
+  return sortOrder === 'desc' ? -cmp : cmp;
+}
+
+function compareTodos(
+  a: { title: string; priority: Priority; dueDate: number | null; createdAt: number; updatedAt: number },
+  b: { title: string; priority: Priority; dueDate: number | null; createdAt: number; updatedAt: number },
+  sortBy: string
+): number {
+  switch (sortBy) {
+    case 'priority':
+      return PRIORITY_WEIGHT[a.priority] - PRIORITY_WEIGHT[b.priority];
+    case 'title':
+      return a.title.localeCompare(b.title);
+    case 'dueDate':
+      if (a.dueDate === null && b.dueDate === null) return 0;
+      if (a.dueDate === null) return 1;
+      if (b.dueDate === null) return -1;
+      return a.dueDate - b.dueDate;
+    case 'updatedAt':
+      return a.updatedAt - b.updatedAt;
+    case 'createdAt':
+    default:
+      return a.createdAt - b.createdAt;
+  }
+}
 
 export const selectSortedTodos = createSelector(
   [selectSearchedTodos, selectSortBy, selectSortOrder],
   (todos, sortBy, sortOrder) =>
-    [...todos].sort((a, b) => {
-      let cmp = 0;
-      switch (sortBy) {
-        case 'priority':
-          cmp = PRIORITY_WEIGHT[a.priority] - PRIORITY_WEIGHT[b.priority];
-          break;
-        case 'dueDate':
-          if (a.dueDate === null && b.dueDate === null) cmp = 0;
-          else if (a.dueDate === null) cmp = 1;
-          else if (b.dueDate === null) cmp = -1;
-          else cmp = a.dueDate - b.dueDate;
-          break;
-        case 'updatedAt':
-          cmp = a.updatedAt - b.updatedAt;
-          break;
-        case 'createdAt':
-        default:
-          cmp = a.createdAt - b.createdAt;
-          break;
-      }
-      return sortOrder === 'desc' ? -cmp : cmp;
-    })
+    [...todos].sort((a, b) => applySortOrder(compareTodos(a, b, sortBy), sortOrder))
 );
 
-// ─── 5. Smart Views ───────────────────────────────────────────────────────────
+// ─── 6. Smart Views ───────────────────────────────────────────────────────────
 // Dedicated selectors for Today / Overdue / High Priority screens.
 // These respect the active list and search query but bypass the status filter
 // since each view IS its own filter. They also apply sort for UI-readiness.
@@ -139,22 +159,7 @@ export const selectTodayTodos = createSelector(
     const filtered = todos.filter(
       (t) => !t.completed && t.dueDate !== null && t.dueDate >= start && t.dueDate <= end
     );
-    return [...filtered].sort((a, b) => {
-      let cmp = 0;
-      if (sortBy === 'priority') {
-        cmp = PRIORITY_WEIGHT[a.priority] - PRIORITY_WEIGHT[b.priority];
-      } else if (sortBy === 'dueDate') {
-        if (a.dueDate === null && b.dueDate === null) cmp = 0;
-        else if (a.dueDate === null) cmp = 1;
-        else if (b.dueDate === null) cmp = -1;
-        else cmp = a.dueDate - b.dueDate;
-      } else if (sortBy === 'updatedAt') {
-        cmp = a.updatedAt - b.updatedAt;
-      } else {
-        cmp = a.createdAt - b.createdAt;
-      }
-      return sortOrder === 'desc' ? -cmp : cmp;
-    });
+    return [...filtered].sort((a, b) => applySortOrder(compareTodos(a, b, sortBy), sortOrder));
   }
 );
 
@@ -166,22 +171,7 @@ export const selectOverdueTodos = createSelector(
     const filtered = todos.filter(
       (t) => !t.completed && t.dueDate !== null && t.dueDate < now
     );
-    return [...filtered].sort((a, b) => {
-      let cmp = 0;
-      if (sortBy === 'priority') {
-        cmp = PRIORITY_WEIGHT[a.priority] - PRIORITY_WEIGHT[b.priority];
-      } else if (sortBy === 'dueDate') {
-        if (a.dueDate === null && b.dueDate === null) cmp = 0;
-        else if (a.dueDate === null) cmp = 1;
-        else if (b.dueDate === null) cmp = -1;
-        else cmp = a.dueDate - b.dueDate;
-      } else if (sortBy === 'updatedAt') {
-        cmp = a.updatedAt - b.updatedAt;
-      } else {
-        cmp = a.createdAt - b.createdAt;
-      }
-      return sortOrder === 'desc' ? -cmp : cmp;
-    });
+    return [...filtered].sort((a, b) => applySortOrder(compareTodos(a, b, sortBy), sortOrder));
   }
 );
 
@@ -190,22 +180,88 @@ export const selectHighPriorityTodos = createSelector(
   [selectListSearchedTodos, selectSortBy, selectSortOrder],
   (todos, sortBy, sortOrder) => {
     const filtered = todos.filter((t) => t.priority === 'high' && !t.completed);
-    return [...filtered].sort((a, b) => {
-      let cmp = 0;
-      if (sortBy === 'dueDate') {
-        if (a.dueDate === null && b.dueDate === null) cmp = 0;
-        else if (a.dueDate === null) cmp = 1;
-        else if (b.dueDate === null) cmp = -1;
-        else cmp = a.dueDate - b.dueDate;
-      } else if (sortBy === 'updatedAt') {
-        cmp = a.updatedAt - b.updatedAt;
-      } else {
-        cmp = a.createdAt - b.createdAt;
-      }
-      return sortOrder === 'desc' ? -cmp : cmp;
-    });
+    return [...filtered].sort((a, b) => applySortOrder(compareTodos(a, b, sortBy), sortOrder));
   }
 );
+
+// ─── 7. Inbox View ────────────────────────────────────────────────────────────
+// Full pipeline scoped to the Inbox list (DEFAULT_LIST_ID). Used by the home
+// screen to show filtered + sorted inbox todos without touching activeListId.
+
+const selectInboxTodos = createSelector(
+  [selectAllTodos],
+  (todos) => todos.filter((t) => t.listId === DEFAULT_LIST_ID)
+);
+
+const selectInboxStatusFilteredTodos = createSelector(
+  [selectInboxTodos, selectFilter],
+  (todos, filter) => {
+    const now = Date.now();
+    switch (filter) {
+      case 'active':        return todos.filter((t) => !t.completed);
+      case 'completed':     return todos.filter((t) => t.completed);
+      case 'overdue':       return todos.filter((t) => !t.completed && t.dueDate !== null && t.dueDate < now);
+      case 'high_priority': return todos.filter((t) => t.priority === 'high' && !t.completed);
+      case 'due_today': {
+        const start = startOfToday();
+        const end = endOfToday();
+        return todos.filter((t) => !t.completed && t.dueDate !== null && t.dueDate >= start && t.dueDate <= end);
+      }
+      default:              return todos;
+    }
+  }
+);
+
+const selectInboxPriorityFilteredTodos = createSelector(
+  [selectInboxStatusFilteredTodos, selectPriorityFilter],
+  (todos, priorityFilter) =>
+    priorityFilter === 'all' ? todos : todos.filter((t) => t.priority === priorityFilter)
+);
+
+export const selectInboxFilteredSortedTodos = createSelector(
+  [selectInboxPriorityFilteredTodos, selectSortBy, selectSortOrder],
+  (todos, sortBy, sortOrder) =>
+    [...todos].sort((a, b) => applySortOrder(compareTodos(a, b, sortBy), sortOrder))
+);
+
+// ─── 8. Per-List View (factory) ──────────────────────────────────────────────
+// Returns a memoized selector scoped to a specific list ID.
+// Call once per list screen mount: useMemo(() => makeSelectListFilteredSortedTodos(id), [id])
+
+export function makeSelectListFilteredSortedTodos(listId: string) {
+  const selectListTodos = createSelector(
+    [selectAllTodos],
+    (todos) => todos.filter((t) => t.listId === listId)
+  );
+  const selectListStatusFiltered = createSelector(
+    [selectListTodos, selectFilter],
+    (todos, filter) => {
+      const now = Date.now();
+      switch (filter) {
+        case 'active':        return todos.filter((t) => !t.completed);
+        case 'completed':     return todos.filter((t) => t.completed);
+        case 'overdue':       return todos.filter((t) => !t.completed && t.dueDate !== null && t.dueDate < now);
+        case 'high_priority': return todos.filter((t) => t.priority === 'high' && !t.completed);
+        case 'due_today': {
+          const start = startOfToday();
+          const end = endOfToday();
+          return todos.filter((t) => !t.completed && t.dueDate !== null && t.dueDate >= start && t.dueDate <= end);
+        }
+        default:              return todos;
+      }
+    }
+  );
+  const selectListPriorityFiltered = createSelector(
+    [selectListStatusFiltered, selectPriorityFilter],
+    (todos, priorityFilter) =>
+      priorityFilter === 'all' ? todos : todos.filter((t) => t.priority === priorityFilter)
+  );
+  return createSelector(
+    [selectListPriorityFiltered, selectSortBy, selectSortOrder],
+    (todos, sortBy, sortOrder) =>
+      [...todos].sort((a, b) => applySortOrder(compareTodos(a, b, sortBy), sortOrder))
+  );
+}
 
 // ─── 6. Combined (UI-ready) ───────────────────────────────────────────────────
 // Alias for the full pipeline: list → status filter → search → sort.

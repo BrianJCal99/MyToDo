@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Todo, Filter, SortBy, SortOrder } from '@/features/todos/todosSlice';
+import { Todo, Filter, PriorityFilter, SortBy, SortOrder } from '@/features/todos/todosSlice';
 import { List } from '@/features/lists/listsSlice';
 
 const todosKey = (userId: string) => `@todos_${userId}`;
@@ -88,6 +88,7 @@ export async function saveListPendingDeleteIdsToStorage(userId: string, ids: str
 
 export interface StoredPrefs {
   filter: Filter;
+  priorityFilter: PriorityFilter;
   sortBy: SortBy;
   sortOrder: SortOrder;
   searchQuery: string;

@@ -36,7 +36,9 @@ import {
   DEFAULT_LIST_ID,
 } from '@/features/lists/listsSlice';
 import TodoItem from '@/components/TodoItem';
+import FilterSortModal from '@/components/FilterSortModal';
 import LniIcon from '@/components/LniIcon';
+import { selectInboxFilteredSortedTodos } from '@/features/todos/todosSelectors';
 
 const SIDEBAR_WIDTH = 260;
 const PRIORITIES: Priority[] = ['low', 'medium', 'high'];
@@ -77,6 +79,13 @@ export default function HomeScreen() {
   const allTodos = useAppSelector((state) => state.todos.todos);
   const allLists = useAppSelector((state) => state.lists.lists);
   const loading = useAppSelector((state) => state.todos.loading);
+  const hasActiveFilters = useAppSelector(
+    (state) =>
+      state.todos.filter !== 'all' ||
+      state.todos.priorityFilter !== 'all' ||
+      state.todos.sortBy !== 'createdAt' ||
+      state.todos.sortOrder !== 'desc'
+  );
 
   // ── Wallpaper — must be above makeStyles so wallpaper state is available ────
   const insets = useSafeAreaInsets();
@@ -106,6 +115,9 @@ export default function HomeScreen() {
   // ── Sidebar ────────────────────────────────────────────────────────────────
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const translateX = useRef(new Animated.Value(SIDEBAR_WIDTH)).current;
+
+  // ── Filter / Sort modal ────────────────────────────────────────────────────
+  const [filterSortOpen, setFilterSortOpen] = useState(false);
 
   // ── Add Todo sheet ─────────────────────────────────────────────────────────
   const [addSheetOpen, setAddSheetOpen] = useState(false);
@@ -176,10 +188,7 @@ export default function HomeScreen() {
     return () => subscription.remove();
   }, [userId]);
 
-  const inboxTodos = useMemo(
-    () => allTodos.filter((t) => t.listId === DEFAULT_LIST_ID),
-    [allTodos]
-  );
+  const inboxTodos = useAppSelector(selectInboxFilteredSortedTodos);
 
   const customLists = useMemo(
     () => allLists.filter((l) => l.id !== DEFAULT_LIST_ID),
@@ -189,6 +198,14 @@ export default function HomeScreen() {
   const todoCountByList = useMemo(() => {
     const map: Record<string, number> = {};
     for (const t of allTodos) map[t.listId] = (map[t.listId] ?? 0) + 1;
+    return map;
+  }, [allTodos]);
+
+  const completedCountByList = useMemo(() => {
+    const map: Record<string, number> = {};
+    for (const t of allTodos) {
+      if (t.completed) map[t.listId] = (map[t.listId] ?? 0) + 1;
+    }
     return map;
   }, [allTodos]);
 
@@ -275,12 +292,17 @@ export default function HomeScreen() {
   function renderItem({ item }: { item: HomeItem }) {
     if (item.type === 'sectionHeader') {
       const icon = item.label === 'Inbox' ? 'lni-box-closed' : 'lni-folder-1';
+      const inboxTotal = item.label === 'Inbox' ? (todoCountByList[DEFAULT_LIST_ID] ?? 0) : null;
+      const inboxDone  = item.label === 'Inbox' ? (completedCountByList[DEFAULT_LIST_ID] ?? 0) : null;
       return (
         <View style={styles.sectionHeader}>
           <View style={styles.sectionLabelRow}>
             <LniIcon name={icon} size={14} color={sectionIconColor} />
             <Text style={styles.sectionLabel}>{item.label}</Text>
           </View>
+          {inboxTotal !== null && inboxTotal > 0 && (
+            <Text style={styles.completionCount}>{inboxDone}/{inboxTotal} done</Text>
+          )}
           {item.label === 'Inbox' && (
             <TouchableOpacity onPress={openAddSheet} hitSlop={10}>
               <LniIcon name="lni-plus" size={18} color={sectionAccentColor} />
@@ -295,7 +317,11 @@ export default function HomeScreen() {
       );
     }
     if (item.type === 'inboxEmpty') {
-      return <Text style={styles.emptyText}>No todos in Inbox</Text>;
+      return (
+        <Text style={styles.emptyText}>
+          {hasActiveFilters ? 'No todos match the current filters' : 'No todos in Inbox'}
+        </Text>
+      );
     }
     if (item.type === 'listsEmpty') {
       return <Text style={styles.emptyText}>No lists yet. Tap + to create one.</Text>;
@@ -321,7 +347,9 @@ export default function HomeScreen() {
           </View>
           <View style={styles.listCardText}>
             <Text style={styles.listCardName}>{list.name}</Text>
-            <Text style={styles.listCardCount}>{count} {count === 1 ? 'todo' : 'todos'}</Text>
+            <Text style={styles.listCardCount}>
+              {completedCountByList[list.id] ?? 0}/{count} done
+            </Text>
           </View>
           <LniIcon name="lni-chevron-right-circle" size={16} color={colors.muted} />
         </TouchableOpacity>
@@ -344,6 +372,12 @@ export default function HomeScreen() {
         <View style={styles.headerActions}>
           <TouchableOpacity onPress={() => router.push('/(tabs)/search')} hitSlop={12}>
             <LniIcon name="lni-search-1" size={22} color={headerIconColor} />
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => setFilterSortOpen(true)} hitSlop={12}>
+            <View>
+              <LniIcon name="lni-funnel-1" size={22} color={headerIconColor} />
+              {hasActiveFilters && <View style={styles.filterBadge} />}
+            </View>
           </TouchableOpacity>
           <TouchableOpacity onPress={openSidebar} hitSlop={12}>
             <View style={styles.hamburger}>
@@ -373,6 +407,9 @@ export default function HomeScreen() {
           keyboardShouldPersistTaps="handled"
         />
       )}
+
+      {/* ── Filter / Sort modal ─────────────────────────────────────────── */}
+      <FilterSortModal visible={filterSortOpen} onClose={() => setFilterSortOpen(false)} />
 
       {/* ── Add Todo modal ───────────────────────────────────────────────── */}
       <Modal
@@ -772,6 +809,15 @@ function makeStyles(colors: ThemeColors, hasWallpaper: boolean, insets: { top: n
       backgroundColor: colors.yellow,
       borderRadius: 2,
     },
+    filterBadge: {
+      position: 'absolute',
+      top: 0,
+      right: 0,
+      width: 7,
+      height: 7,
+      borderRadius: 4,
+      backgroundColor: colors.yellow,
+    },
     list: {
       paddingBottom: 32 + insets.bottom,
     },
@@ -799,6 +845,12 @@ function makeStyles(colors: ThemeColors, hasWallpaper: boolean, insets: { top: n
       color: hasWallpaper ? 'rgba(255,255,255,0.75)' : colors.muted,
       textTransform: 'uppercase',
       letterSpacing: 0.8,
+      ...(hasWallpaper && WALLPAPER_TEXT_SHADOW),
+    },
+    completionCount: {
+      fontSize: 12,
+      fontWeight: '600',
+      color: hasWallpaper ? 'rgba(255,255,255,0.7)' : colors.muted,
       ...(hasWallpaper && WALLPAPER_TEXT_SHADOW),
     },
     emptyText: {
