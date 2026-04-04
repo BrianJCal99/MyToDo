@@ -38,7 +38,12 @@ export default function LoginScreen() {
     setLoading(true);
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     setLoading(false);
-    if (error) Alert.alert('Login failed', error.message);
+    if (error) {
+      const msg = error.message.toLowerCase().includes('invalid login credentials')
+        ? 'Invalid email or password.'
+        : error.message;
+      Alert.alert('Login failed', msg);
+    }
   }
 
   return (

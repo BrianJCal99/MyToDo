@@ -64,7 +64,21 @@ export default function AccountScreen() {
       Alert.alert('Error', 'Please fill in both password fields.');
       return;
     }
+    if (newPassword.length < 8) {
+      Alert.alert('Error', 'New password must be at least 8 characters.');
+      return;
+    }
     setSavingPassword(true);
+    // Verify the current password before allowing the change
+    const { error: signInError } = await supabase.auth.signInWithPassword({
+      email,
+      password: currentPassword,
+    });
+    if (signInError) {
+      setSavingPassword(false);
+      Alert.alert('Error', 'Current password is incorrect.');
+      return;
+    }
     const { error } = await supabase.auth.updateUser({ password: newPassword });
     setSavingPassword(false);
     if (error) {

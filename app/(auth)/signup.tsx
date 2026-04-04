@@ -36,6 +36,10 @@ export default function SignUpScreen() {
       Alert.alert('Error', 'Please fill in all fields.');
       return;
     }
+    if (password.length < 8) {
+      Alert.alert('Error', 'Password must be at least 8 characters.');
+      return;
+    }
     setLoading(true);
     const { error } = await supabase.auth.signUp({
       email,
@@ -43,7 +47,12 @@ export default function SignUpScreen() {
       options: { data: { first_name: firstName.trim() } },
     });
     setLoading(false);
-    if (error) Alert.alert('Sign up failed', error.message);
+    if (error) {
+      const msg = error.message.toLowerCase().includes('user already registered')
+        ? 'An account with this email already exists.'
+        : error.message;
+      Alert.alert('Sign up failed', msg);
+    }
   }
 
   return (

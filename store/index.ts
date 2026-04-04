@@ -22,11 +22,11 @@ import todosReducer, {
   updateTodo,
 } from "@/features/todos/todosSlice";
 import {
+  saveListPendingDeleteIdsToStorage,
   saveListsToStorage,
   savePrefsToStorage,
-  saveTodosToStorage,
   saveTodoPendingDeleteIdsToStorage,
-  saveListPendingDeleteIdsToStorage,
+  saveTodosToStorage,
 } from "@/services/storage";
 import { configureStore, createListenerMiddleware } from "@reduxjs/toolkit";
 import { useDispatch, useSelector } from "react-redux";
@@ -63,8 +63,11 @@ listenerMiddleware.startListening({
 
 listenerMiddleware.startListening({
   predicate: (action) =>
-    [addTodo.fulfilled.type, updateTodo.fulfilled.type, toggleTodo.fulfilled.type]
-      .includes((action as { type: string }).type),
+    [
+      addTodo.fulfilled.type,
+      updateTodo.fulfilled.type,
+      toggleTodo.fulfilled.type,
+    ].includes((action as { type: string }).type),
   effect: async (_, { getState, dispatch }) => {
     const state = getState() as RootState;
     const userId = state.user.id;
@@ -99,8 +102,9 @@ listenerMiddleware.startListening({
 
 listenerMiddleware.startListening({
   predicate: (action) =>
-    [addList.fulfilled.type, updateList.fulfilled.type]
-      .includes((action as { type: string }).type),
+    [addList.fulfilled.type, updateList.fulfilled.type].includes(
+      (action as { type: string }).type,
+    ),
   effect: async (_, { getState, dispatch }) => {
     const state = getState() as RootState;
     const userId = state.user.id;
@@ -112,23 +116,31 @@ listenerMiddleware.startListening({
 
 listenerMiddleware.startListening({
   predicate: (action) =>
-    [deleteTodo.fulfilled.type, syncTodos.fulfilled.type, hydrateTodos.fulfilled.type]
-      .includes((action as { type: string }).type),
+    [
+      deleteTodo.fulfilled.type,
+      syncTodos.fulfilled.type,
+      hydrateTodos.fulfilled.type,
+    ].includes((action as { type: string }).type),
   effect: async (_, { getState }) => {
     const state = getState() as RootState;
     const userId = state.user.id;
-    if (userId) saveTodoPendingDeleteIdsToStorage(userId, state.todos.pendingDeleteIds);
+    if (userId)
+      saveTodoPendingDeleteIdsToStorage(userId, state.todos.pendingDeleteIds);
   },
 });
 
 listenerMiddleware.startListening({
   predicate: (action) =>
-    [deleteList.fulfilled.type, syncLists.fulfilled.type, hydrateLists.fulfilled.type]
-      .includes((action as { type: string }).type),
+    [
+      deleteList.fulfilled.type,
+      syncLists.fulfilled.type,
+      hydrateLists.fulfilled.type,
+    ].includes((action as { type: string }).type),
   effect: async (_, { getState }) => {
     const state = getState() as RootState;
     const userId = state.user.id;
-    if (userId) saveListPendingDeleteIdsToStorage(userId, state.lists.pendingDeleteIds);
+    if (userId)
+      saveListPendingDeleteIdsToStorage(userId, state.lists.pendingDeleteIds);
   },
 });
 
@@ -173,8 +185,15 @@ export const store = configureStore({
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware().prepend(listenerMiddleware.middleware),
   devTools: false, // Disable default to use the Expo plugin
-  enhancers: (getDefaultEnhancers) =>
-    getDefaultEnhancers().concat(devToolsEnhancer()),
+  // __DEV__ is a React Native global that is true in development and false in
+  // production builds. Redux DevTools are only enabled in dev to avoid exposing
+  // app state (user email, todos, etc.) in production.
+  enhancers: (getDefaultEnhancers) => {
+    console.log("[store] __DEV__:", __DEV__);
+    return __DEV__
+      ? getDefaultEnhancers().concat(devToolsEnhancer())
+      : getDefaultEnhancers();
+  },
 });
 
 export type RootState = ReturnType<typeof store.getState>;
